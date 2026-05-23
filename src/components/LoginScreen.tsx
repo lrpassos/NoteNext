@@ -40,7 +40,7 @@ export default function LoginScreen({ onLoginSuccess }: LoginScreenProps) {
   const [registeredUsers, setRegisteredUsers] = useState<{email: string; password: string; secret: string}[]>(() => {
     const saved = localStorage.getItem("notenext_users");
     if (saved) return JSON.parse(saved);
-    const defaults = [{ email: "admin@notenext.sh", password: "password123", secret: "N2-MFA-DEFAULT-KEY" }];
+    const defaults = [{ email: "admin@notenext.sh", password: "password123", secret: "JVXW46LHOJSXG5DV" }];
     localStorage.setItem("notenext_users", JSON.stringify(defaults));
     return defaults;
   });
@@ -55,15 +55,12 @@ export default function LoginScreen({ onLoginSuccess }: LoginScreenProps) {
   const [regMfaCode, setRegMfaCode] = useState("");
   const [copiedKey, setCopiedKey] = useState(false);
 
-  // Generate a cryptographically styled beautiful string for MFA Setup
+  // Generate a cryptographically styled beautiful string for MFA Setup compliant with RFC 4226 / RFC 6238 Base32 Secret Key Specification
   const generateRandomSecret = () => {
     const chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZ234567";
-    let key = "NTNX-";
-    for (let i = 0; i < 4; i++) {
-      for (let j = 0; j < 4; j++) {
-        key += chars.charAt(Math.floor(Math.random() * chars.length));
-      }
-      if (i < 3) key += "-";
+    let key = "";
+    for (let i = 0; i < 16; i++) {
+      key += chars.charAt(Math.floor(Math.random() * chars.length));
     }
     setRegSecretKey(key);
   };
@@ -388,91 +385,34 @@ export default function LoginScreen({ onLoginSuccess }: LoginScreenProps) {
                         Código QR Para Ativação
                       </span>
                       
-                      {/* High-Fidelity detailed Vector QR Code SVG */}
-                      <svg width="150" height="150" viewBox="0 0 100 100" className="mx-auto rounded-xl bg-white p-2 border border-brand-100 shadow-sm">
-                        {/* Positioning corners */}
-                        {/* Top Left */}
-                        <path d="M5 5h18v18H5zm4 4h10v10H9zm2 2h6v6h-6z" fill="#064e3b" />
-                        {/* Top Right */}
-                        <path d="M77 5h18v18H77zm4 4h10v10H81zm2 2h6v6h-6z" fill="#064e3b" />
-                        {/* Bottom Left */}
-                        <path d="M5 77h18v18H5zm4 4h10v10H9zm2 2h6v6h-6z" fill="#064e3b" />
-                        {/* Align pattern */}
-                        <path d="M79 79h6v6h-6z" fill="#059669" />
-                        
-                        {/* Pixel patterns scattered around to look like a realistic QR code */}
-                        <g fill="#1f2937">
-                          <rect x="27" y="5" width="4" height="4" />
-                          <rect x="35" y="5" width="8" height="4" />
-                          <rect x="47" y="5" width="4" height="8" />
-                          <rect x="55" y="9" width="12" height="4" />
-                          
-                          <rect x="27" y="17" width="8" height="4" />
-                          <rect x="39" y="13" width="4" height="8" />
-                          <rect x="51" y="17" width="8" height="4" />
-                          <rect x="63" y="13" width="8" height="4" />
-                          
-                          <rect x="27" y="25" width="12" height="4" />
-                          <rect x="43" y="25" width="4" height="8" />
-                          <rect x="51" y="29" width="4" height="4" />
-                          <rect x="59" y="25" width="12" height="4" />
-                          <rect x="75" y="25" width="4" height="8" />
-                          <rect x="83" y="25" width="8" height="4" />
-                          
-                          <rect x="5" y="27" width="4" height="4" />
-                          <rect x="13" y="27" width="8" height="4" />
-                          <rect x="5" y="35" width="12" height="4" />
-                          <rect x="21" y="35" width="4" height="4" />
-                          
-                          <rect x="27" y="37" width="4" height="8" />
-                          <rect x="35" y="41" width="8" height="4" />
-                          <rect x="47" y="37" width="8" height="4" />
-                          <rect x="59" y="41" width="4" height="12" />
-                          <rect x="67" y="37" width="16" height="4" />
-                          <rect x="87" y="33" width="8" height="4" />
-                          
-                          <rect x="5" y="47" width="4" height="12" />
-                          <rect x="13" y="51" width="4" height="4" />
-                          <rect x="21" y="47" width="8" height="4" />
-                          <rect x="33" y="49" width="12" height="4" />
-                          <rect x="49" y="47" width="4" height="4" />
-                          <rect x="73" y="47" width="16" height="4" />
-                          
-                          <rect x="13" y="61" width="8" height="4" />
-                          <rect x="25" y="59" width="16" height="4" />
-                          <rect x="45" y="59" width="4" height="8" />
-                          <rect x="53" y="63" width="12" height="4" />
-                          <rect x="69" y="59" width="4" height="4" />
-                          
-                          <rect x="27" y="71" width="4" height="8" />
-                          <rect x="35" y="73" width="12" height="4" />
-                          <rect x="51" y="71" width="8" height="4" />
-                          <rect x="63" y="69" width="4" height="12" />
-                          <rect x="71" y="73" width="4" height="4" />
-                          
-                          <rect x="27" y="83" width="16" height="4" />
-                          <rect x="47" y="81" width="4" height="8" />
-                          <rect x="55" y="83" width="12" height="4" />
-                          <rect x="71" y="81" width="8" height="4" />
-                          
-                          <rect x="33" y="91" width="8" height="4" />
-                          <rect x="45" y="89" width="12" height="4" />
-                          <rect x="61" y="93" width="16" height="4" />
-                        </g>
-                        
-                        {/* Premium green branding locks inside center */}
-                        <rect x="41" y="41" width="18" height="18" rx="4" fill="#064e3b" />
-                        <path d="M46 48v4h8v-4a4 4 0 0 0-8 0zm2 0a2 2 0 0 1 4 0v4h-4z" fill="#34d399" />
-                        <rect x="44" y="49" width="12" height="7" rx="1" fill="#10b981" />
-                        <circle cx="50" cy="52" r="1" fill="#ffffff" />
-                      </svg>
+                      {/* High-Contrast Standard Scannable QR Code */}
+                      <div className="relative mx-auto bg-white p-3 rounded-2xl border border-brand-100 inline-block shadow-sm">
+                        <img 
+                          src={`https://api.qrserver.com/v1/create-qr-code/?size=180x180&data=${encodeURIComponent(`otpauth://totp/NoteNext:${regEmail || "usuario"}?secret=${regSecretKey}&issuer=NoteNext`)}&ecc=M&color=000000`}
+                          alt="NoteNext MFA QR Code"
+                          className="w-[140px] h-[140px] object-contain block select-none mx-auto"
+                          referrerPolicy="no-referrer"
+                          onError={(e) => {
+                            // Fallback to Google Charts API if QR Server is unavailable
+                            const img = e.currentTarget;
+                            const backupUrl = `https://chart.googleapis.com/chart?chs=180x180&cht=qr&chl=${encodeURIComponent(`otpauth://totp/NoteNext:${regEmail || "usuario"}?secret=${regSecretKey}&issuer=NoteNext`)}&choe=UTF-8`;
+                            if (img.src !== backupUrl) {
+                              img.src = backupUrl;
+                            }
+                          }}
+                        />
+                      </div>
+
+                      <p className="text-[10px] text-gray-500 max-w-xs mx-auto leading-normal px-2">
+                        Aponte a câmera do seu celular ou utilize seu app de autenticação (Google Authenticator, Microsoft Authenticator, Authy, etc.) para registrar.
+                      </p>
 
                       {/* Manual key Copy Block */}
                       <div className="space-y-1 px-2 text-left">
                         <span className="text-[10px] text-gray-400 block font-medium">Chave secreta de calibração:</span>
-                        <div className="flex items-center justify-between bg-white border border-gray-200 px-2 py-1 rounded-xl">
-                          <code className="text-xs font-mono text-[#064e3b] font-bold tracking-wider select-all truncate max-w-[210px]">
-                            {regSecretKey}
+                        <div className="flex items-center justify-between bg-white border border-gray-200 px-2 py-1.5 rounded-xl">
+                          <code className="text-xs font-mono text-[#064e3b] font-bold tracking-wider select-all truncate max-w-[210px]" title="Insira esta chave manualmente se o QR Code não puder ser lido">
+                            {regSecretKey.match(/.{1,4}/g)?.join(" ") || regSecretKey}
                           </code>
                           <button
                             type="button"
@@ -481,11 +421,14 @@ export default function LoginScreen({ onLoginSuccess }: LoginScreenProps) {
                               setCopiedKey(true);
                               setTimeout(() => setCopiedKey(false), 2000);
                             }}
-                            className="bg-brand-50 hover:bg-brand-100 text-brand-850 px-2.5 py-0.5 rounded-lg text-[10px] font-bold border border-brand-200 transition-all"
+                            className="bg-brand-50 hover:bg-brand-100 text-brand-850 px-2.5 py-1 rounded-lg text-[10px] font-bold border border-brand-200 transition-all flex-shrink-0"
                           >
                             {copiedKey ? "Copiado!" : "Copiar"}
                           </button>
                         </div>
+                        <span className="text-[9px] text-gray-400 block leading-tight pt-0.5">
+                          Se necessário, digite a chave acima no seu app de autenticação escolhendo "Inserir chave de configuração" (MFA por tempo - TOTP).
+                        </span>
                       </div>
 
                       {/* Backup Keys */}
