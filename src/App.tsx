@@ -20,14 +20,17 @@ import {
   EditorBlock,
   CanvasElement,
   CanvasConnection,
-  KeepNote
+  KeepNote,
+  WorkspaceCategory,
+  GeminiAgent
 } from "./types";
 import LoginScreen from "./components/LoginScreen";
 import Sidebar from "./components/Sidebar";
 import BlockEditor from "./components/BlockEditor";
 import CanvasWorkspace from "./components/CanvasWorkspace";
 import KeepWorkspace from "./components/KeepWorkspace";
-import AiAssistant from "./components/AiAssistant";
+import SaaSConfigPanel from "./components/SaaSConfigPanel";
+import SmartNotebook from "./components/SmartNotebook";
 
 // Elegant preset documents on first launch to showcase startup design flavor
 const INITIAL_DEMO_ITEMS: WorkspaceItem[] = [
@@ -128,6 +131,18 @@ const INITIAL_DEMO_ITEMS: WorkspaceItem[] = [
   }
 ];
 
+const DEFAULT_CATEGORIES: WorkspaceCategory[] = [
+  { id: "cat-proj", name: "Projetos", color: "#10b981", order: 0 },
+  { id: "cat-brain", name: "Brainstorm", color: "#4f46e5", order: 1 },
+  { id: "cat-pess", name: "Pessoal", color: "#e11d48", order: 2 },
+  { id: "cat-rote", name: "Roteiros", color: "#b45309", order: 3 }
+];
+
+const DEFAULT_AGENTS: GeminiAgent[] = [
+  { id: "ag-heitor", name: "Heitor", role: "Copywriter Pro", systemInstruction: "Você é Heitor, um Copywriter de alta conversão. Escreva chamadas persuasivas e refinadas para ideias de produtos.", model: "gemini-3.5-flash", isActive: true, status: "online" },
+  { id: "ag-julia", name: "Júlia", role: "Programadora Especialista", systemInstruction: "Você é Júlia, uma programadora sênior fullstack. Responda em blocos de códigos TypeScript limpos e comentados corporativos.", model: "gemini-3.1-pro-preview", isActive: false, status: "online" }
+];
+
 export default function App() {
   const [session, setSession] = useState<UserSession | null>(null);
   const [items, setItems] = useState<WorkspaceItem[]>([]);
@@ -137,10 +152,16 @@ export default function App() {
   const [activeCategory, setActiveCategory] = useState<string>("Todos");
   const [searchQuery, setSearchQuery] = useState("");
 
-  // AI Drawer states
+  // AI Drawer and Loading states
   const [isAiOpen, setIsAiOpen] = useState(false);
   const [isAiLoading, setIsAiLoading] = useState(false);
 
+  // Custom states for SaaS configurations
+  const [categories, setCategories] = useState<WorkspaceCategory[]>([]);
+  const [agents, setAgents] = useState<GeminiAgent[]>([]);
+  const [isConfigOpen, setIsConfigOpen] = useState(false);
+  const [isNotebookOpen, setIsNotebookOpen] = useState(false);
+  
   // Load session & data from localstorage
   useEffect(() => {
     const savedSession = localStorage.getItem("notenext_session") || localStorage.getItem("veridian_session");
@@ -159,6 +180,24 @@ export default function App() {
       setItems(INITIAL_DEMO_ITEMS);
       localStorage.setItem("notenext_items", JSON.stringify(INITIAL_DEMO_ITEMS));
       setActiveItemId("demo-notion");
+    }
+
+    // Load or initialize colored categories
+    const savedCategories = localStorage.getItem("notenext_categories");
+    if (savedCategories) {
+      setCategories(JSON.parse(savedCategories));
+    } else {
+      setCategories(DEFAULT_CATEGORIES);
+      localStorage.setItem("notenext_categories", JSON.stringify(DEFAULT_CATEGORIES));
+    }
+
+    // Load or initialize Gemini Agents
+    const savedAgents = localStorage.getItem("notenext_agents");
+    if (savedAgents) {
+      setAgents(JSON.parse(savedAgents));
+    } else {
+      setAgents(DEFAULT_AGENTS);
+      localStorage.setItem("notenext_agents", JSON.stringify(DEFAULT_AGENTS));
     }
   }, []);
 
@@ -252,11 +291,55 @@ export default function App() {
     }
   };
 
-  // Bridge custom triggers from sub-components to Gemini
-  const handleTriggerAiFromContext = async (prompt: string, contextId: string | number) => {
-    setIsAiOpen(true);
+  // Bridge custom triggers from sub-components to Gemini on server-side using active agents instructions
+  const handleTriggerAiFromContext = async (prompt: string, blockIndex: any) => {
     setIsAiLoading(true);
-    // Let's forward the context to our AI assistant panel
+    try {
+      const activeAgent = agents.find(a => a.isActive);
+      const systemInstruction = activeAgent 
+        ? `${activeAgent.systemInstruction}. Você está atuando no papel de: ${activeAgent.role}.` 
+        : "Você é o assistente inteligente NoteNext. Escreva com foco em produtividade, criatividade e de forma premium nos detalhes.";
+
+      const response = await fetch("/api/gemini", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ prompt, systemInstruction })
+      });
+
+      const data = await response.json();
+      if (data.error) {
+        alert(`Erro na IA NoteNext: ${data.error}`);
+        return;
+      }
+
+      if (data.text) {
+        const currentItem = items.find(it => it.id === activeItemId);
+        if (currentItem && currentItem.blocks) {
+          const updatedBlocks = [...currentItem.blocks];
+          const lines = data.text.split("\n").filter((l: string) => l.trim().length > 0);
+          
+          const newBlocks: EditorBlock[] = lines.map((line: string) => ({
+            id: `ai-${Math.random().toString(36).substr(2, 5)}`,
+            type: line.trim().startsWith("-") || line.trim().startsWith("*") ? "list" : "paragraph",
+            content: line.replace(/^[-*]/, "").trim()
+          }));
+
+          const insertionIdx = typeof blockIndex === "number" ? blockIndex + 1 : updatedBlocks.length;
+          updatedBlocks.splice(insertionIdx, 0, ...newBlocks);
+          
+          handleChangeItem({
+            ...currentItem,
+            blocks: updatedBlocks,
+            updatedAt: new Date().toISOString()
+          });
+        }
+      }
+    } catch (err: any) {
+      console.error(err);
+      alert("Erro ao conectar com servidor de IA.");
+    } finally {
+      setIsAiLoading(false);
+    }
   };
 
   // Injects AI suggestions back into Notion, Milanote, or Keep elements on-the-fly
@@ -340,6 +423,8 @@ export default function App() {
         onSearchChange={setSearchQuery}
         activeCategory={activeCategory}
         onSelectCategory={setActiveCategory}
+        categoriesList={categories}
+        onOpenSettings={() => setIsConfigOpen(true)}
       />
 
       {/* 2. Main Workspace Editor Router Container */}
@@ -355,24 +440,11 @@ export default function App() {
               className={`p-1.5 rounded-lg border transition-all ${
                 currentItem.isFavorite 
                   ? "bg-amber-50 border-amber-200 text-amber-500 hover:bg-amber-100" 
-                  : "bg-white border-gray-200 text-gray-400 hover:text-amber-500 hover:border-gray-300"
+                  : "bg-white border-gray-250 text-gray-400 hover:text-amber-500 hover:border-gray-300"
               }`}
               title={currentItem.isFavorite ? "Remover dos Favoritos" : "Marcar como Favorito"}
             >
               <Star className={`w-4 h-4 ${currentItem.isFavorite ? "fill-current" : ""}`} />
-            </button>
-
-            {/* Toggle AI Desk drawer */}
-            <button
-              onClick={() => setIsAiOpen(!isAiOpen)}
-              className={`p-1.5 rounded-lg border transition-all flex items-center gap-1.5 text-xs font-semibold ${
-                isAiOpen 
-                  ? "bg-brand-600 border-brand-700 text-white hover:bg-brand-700" 
-                  : "bg-white border-gray-250 text-brand-850 hover:bg-brand-50"
-              }`}
-            >
-              <Sparkles className="w-4 h-4 animate-bounce" />
-              <span>Copilot IA</span>
             </button>
 
             {/* Delete workspace */}
@@ -382,7 +454,7 @@ export default function App() {
                   deleteCurrentWorkspace(currentItem.id);
                 }
               }}
-              className="p-1 px-2 hover:bg-red-50 text-gray-350 hover:text-red-500 text-xs font-semibold rounded-lg border border-transparent hover:border-red-100 transition-all"
+              className="p-1 px-2 hover:bg-red-50 text-gray-350 hover:text-red-500 text-xs font-semibold rounded-lg border border-transparent hover:border-red-100 transition-all cursor-pointer"
               title="Excluir espaço"
             >
               Excluir
@@ -421,6 +493,7 @@ export default function App() {
                   onChangeItem={handleChangeItem}
                   onTriggerAi={handleTriggerAiFromContext}
                   isAiLoading={isAiLoading}
+                  onOpenNotebook={() => setIsNotebookOpen(true)}
                 />
               )}
               {currentItem.type === WorkspaceType.MILANOTE_CANVAS && (
@@ -444,13 +517,56 @@ export default function App() {
         </AnimatePresence>
       </main>
 
-      {/* 3. Right NoteNext IA Copilot Sidebar */}
-      <AiAssistant
-        isOpen={isAiOpen}
-        onClose={() => setIsAiOpen(false)}
-        currentItem={currentItem}
-        onApplyAiOutput={handleApplyAiOutput}
+      {/* Unified SaaS Configuration Panel Overlay */}
+      <SaaSConfigPanel
+        isOpen={isConfigOpen}
+        onClose={() => setIsConfigOpen(false)}
+        categories={categories}
+        onUpdateCategories={(updatedCats) => {
+          setCategories(updatedCats);
+          localStorage.setItem("notenext_categories", JSON.stringify(updatedCats));
+        }}
+        agents={agents}
+        onUpdateAgents={(updatedAgents) => {
+          setAgents(updatedAgents);
+          localStorage.setItem("notenext_agents", JSON.stringify(updatedAgents));
+        }}
+        workspaces={items}
+        onChangeAllItems={(updatedWorkspaces) => saveItems(updatedWorkspaces)}
       />
+
+      {/* Unified Premium Smart Notebook Panel Overlay */}
+      {currentItem && (
+        <SmartNotebook
+          isOpen={isNotebookOpen}
+          onClose={() => setIsNotebookOpen(false)}
+          currentItem={currentItem}
+          workspaces={items}
+          onChangeItem={handleChangeItem}
+          onChangeAllItems={(updatedWorkspaces) => saveItems(updatedWorkspaces)}
+          onTriggerAi={async (prompt) => {
+            try {
+              const activeAgent = agents.find(a => a.isActive);
+              const systemInstruction = activeAgent 
+                ? `${activeAgent.systemInstruction}. Você está atuando no papel de: ${activeAgent.role}.` 
+                : "Você é o assistente inteligente NoteNext. Responda em formato de notas organizadas.";
+              const response = await fetch("/api/gemini", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ prompt, systemInstruction })
+              });
+              const data = await response.json();
+              if (data.error) {
+                throw new Error(data.error);
+              }
+              return data.text || "";
+            } catch (e: any) {
+              alert(`Erro na IA do Caderno Inteligente: ${e.message}`);
+              return "";
+            }
+          }}
+        />
+      )}
 
     </div>
   );

@@ -4,6 +4,7 @@
  */
 
 import React, { useState } from "react";
+import { motion } from "motion/react";
 import { 
   Plus, 
   Search, 
@@ -17,10 +18,16 @@ import {
   Tag, 
   Sparkles,
   Bookmark,
-  Signature
+  Signature,
+  Settings,
+  RefreshCw
 } from "lucide-react";
-import { WorkspaceItem, WorkspaceType, UserSession } from "../types";
+import { WorkspaceItem, WorkspaceType, UserSession, WorkspaceCategory } from "../types";
 
+/**
+ * @description Application side navigation bar.
+ * Controls category filtration, dynamic active workspaces, search filters, and the custom platform logo.
+ */
 interface SidebarProps {
   user: UserSession;
   items: WorkspaceItem[];
@@ -31,6 +38,8 @@ interface SidebarProps {
   onSearchChange: (query: string) => void;
   activeCategory: string;
   onSelectCategory: (category: string) => void;
+  categoriesList: WorkspaceCategory[];
+  onOpenSettings: () => void;
 }
 
 export default function Sidebar({
@@ -42,7 +51,9 @@ export default function Sidebar({
   onLogout,
   onSearchChange,
   activeCategory,
-  onSelectCategory
+  onSelectCategory,
+  categoriesList,
+  onOpenSettings
 }: SidebarProps) {
   const [showAddMenu, setShowAddMenu] = useState(false);
   const [searchVal, setSearchVal] = useState("");
@@ -75,24 +86,44 @@ export default function Sidebar({
     }
   };
 
-  const categories = ["Todos", "Projetos", "Brainstorm", "Pessoal", "Roteiros"];
+  // Removed hardcoded categories
 
   return (
     <aside className="w-64 bg-[#fcfdfd] border-r border-[#eaf2ed] h-screen flex flex-col font-sans select-none relative z-20">
       
       {/* Top Application Ribbon */}
-      <div className="p-4 border-b border-[#eaf2ed] flex items-center justify-between">
+      <div className="p-4 border-b border-[#eaf2ed] flex flex-col gap-2.5">
         <div className="flex items-center gap-2.5">
-          <div className="w-8 h-8 rounded-lg bg-brand-600 flex items-center justify-center shadow-sm shadow-brand-600/20 text-white font-extrabold text-sm" title="NoteNext">
-            <Signature className="w-4 h-4" />
+          {/* Animated Hand Writing Logo */}
+          <div className="w-9 h-9 rounded-xl bg-gradient-to-tr from-brand-600 to-emerald-500 flex items-center justify-center shadow-lg shadow-brand-600/10 text-white relative overflow-hidden group">
+            <motion.div
+              animate={{ 
+                x: [0, 2.5, -1, 3, 0], 
+                y: [0, -1.2, 2.2, -1, 0],
+                rotate: [0, 6, -4, 7, 0] 
+              }}
+              transition={{ repeat: Infinity, duration: 2.8, ease: "easeInOut" }}
+            >
+              <svg className="w-5 h-5 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2.5">
+                <path strokeLinecap="round" strokeLinejoin="round" d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" />
+              </svg>
+            </motion.div>
+            <div className="absolute bottom-0.5 left-1/2 -translate-x-1/2 w-4.5 h-0.5 bg-emerald-300 rounded-full animate-pulse" />
           </div>
-          <div>
-            <h2 className="text-sm font-bold font-display text-gray-900 tracking-tight leading-none flex items-center gap-1.5">
+
+          <div className="truncate">
+            <h2 className="text-sm font-black font-display text-gray-900 tracking-tight leading-none flex items-center gap-1">
               <span>NoteNext</span>
-              <span className="text-[9px] bg-brand-100 text-brand-800 font-semibold px-1 py-0.5 rounded">Pro</span>
+              <span className="text-[8px] bg-brand-100 text-[#064e3b] font-bold px-1.5 py-0.5 rounded uppercase font-sans tracking-wide">Pro</span>
             </h2>
-            <span className="text-[10px] text-gray-400 mt-0.5 block">luiz.rogerios@gmail.com</span>
+            <span className="text-[10px] text-gray-400 mt-1 block truncate leading-none">luiz.rogerios@gmail.com</span>
           </div>
+        </div>
+
+        {/* Discreet elegant automatic saving indicator under logo/email */}
+        <div className="flex items-center gap-1.5 text-[9px] font-bold text-emerald-800 bg-emerald-50 px-2.5 py-1 rounded-xl border border-emerald-100/60 w-max leading-none shadow-3xs">
+          <RefreshCw className="w-3 h-3 text-emerald-600 animate-spin-slow" />
+          <span>✓ Auto Save Active</span>
         </div>
       </div>
 
@@ -191,29 +222,60 @@ export default function Sidebar({
             Categorias
           </span>
           <div className="space-y-0.5">
-            {categories.map((cat) => (
+            {/* Standard "Todos" Category Filter */}
+            <button
+              onClick={() => onSelectCategory("Todos")}
+              className={`w-full px-3 py-1 flex items-center justify-between text-left text-xs rounded-lg transition-all ${
+                activeCategory === "Todos"
+                  ? "bg-brand-50 text-brand-850 font-bold"
+                  : "text-gray-650 hover:bg-gray-50/70"
+              }`}
+            >
+              <span className="flex items-center gap-2">
+                <Tag className="w-3.5 h-3.5 text-brand-655" />
+                <span>Todos os Workspaces</span>
+              </span>
+              <span className="text-[9px] bg-gray-100 text-gray-550 px-1.5 py-0.5 rounded-full border border-gray-200 font-bold leading-none">
+                {items.length}
+              </span>
+            </button>
+
+            {/* Dynamic Configured Colored Categories */}
+            {categoriesList.map((cat) => (
               <button
-                key={cat}
-                onClick={() => onSelectCategory(cat)}
-                className={`w-full px-3 py-1 flex items-center justify-between text-left text-xs rounded-md transition-all ${
-                  activeCategory === cat
-                    ? "bg-brand-50 text-brand-800 font-semibold"
+                key={cat.id}
+                onClick={() => onSelectCategory(cat.name)}
+                className={`w-full px-3 py-1 flex items-center justify-between text-left text-xs rounded-lg transition-all ${
+                  activeCategory.toLowerCase() === cat.name.toLowerCase()
+                    ? "bg-gray-100 text-gray-900 font-bold"
                     : "text-gray-650 hover:bg-gray-50/70"
                 }`}
               >
-                <span className="flex items-center gap-2">
-                  <Tag className={`w-3 h-3 ${activeCategory === cat ? "text-brand-600" : "text-gray-400"}`} />
-                  <span>{cat}</span>
+                <span className="flex items-center gap-2 truncate">
+                  <span 
+                    className="w-2 h-2 rounded-full flex-shrink-0" 
+                    style={{ backgroundColor: cat.color }}
+                  />
+                  <span className="truncate">{cat.name}</span>
                 </span>
-                <span className="text-[9px] bg-gray-50 text-gray-450 px-1 py-0.5 rounded border border-gray-100">
-                  {cat === "Todos" 
-                    ? items.length 
-                    : items.filter(i => i.category.toLowerCase() === cat.toLowerCase()).length
-                  }
+                <span 
+                  className="text-[9.5px] px-1.5 py-0.5 rounded-full font-semibold leading-none border"
+                  style={{ backgroundColor: `${cat.color}15`, color: cat.color, borderColor: `${cat.color}25` }}
+                >
+                  {items.filter(i => i.category.toLowerCase() === cat.name.toLowerCase()).length}
                 </span>
               </button>
             ))}
           </div>
+          
+          {/* Button to quickly trigger Settings -> Categories tab */}
+          <button
+            onClick={onOpenSettings}
+            className="w-full mt-2 text-center text-[10px] font-bold text-brand-800 hover:text-brand-950 flex items-center justify-center gap-1 py-1 hover:bg-brand-50/40 rounded-lg transition-all border border-dashed border-brand-100 cursor-pointer"
+          >
+            <Plus className="w-3 h-3" />
+            <span>Adicionar Categoria</span>
+          </button>
         </div>
 
         {/* Favorite Starred Items */}
@@ -286,7 +348,18 @@ export default function Sidebar({
       </div>
 
       {/* Sidebar Footer User Info block */}
-      <div className="p-3 border-t border-[#eaf2ed] bg-gray-50/50 space-y-2">
+      <div className="p-3 border-t border-[#eaf2ed] bg-gray-50/50 space-y-2.5">
+        
+        {/* Settings Launcher Shortcut */}
+        <button
+          type="button"
+          onClick={onOpenSettings}
+          className="w-full py-1.5 bg-white border border-gray-200 hover:bg-brand-50 text-brand-850 hover:border-brand-200 text-gray-705 font-bold text-[10.5px] rounded-xl flex items-center justify-center gap-1.5 transition-all cursor-pointer shadow-3xs"
+        >
+          <Settings className="w-3.5 h-3.5 text-brand-600" />
+          <span>Gerenciar Agentes & Categorias</span>
+        </button>
+
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-2">
             <div className="w-8 h-8 rounded-full bg-brand-100 border border-brand-200 flex items-center justify-center font-bold text-brand-850 text-xs">

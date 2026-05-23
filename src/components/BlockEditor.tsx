@@ -18,22 +18,33 @@ import {
   Sparkles,
   Command,
   PlusCircle,
-  HelpCircle
+  HelpCircle,
+  Image,
+  Table as TableIcon,
+  Video,
+  FileSpreadsheet
 } from "lucide-react";
 import { EditorBlock, BlockType, WorkspaceItem } from "../types";
 
+/**
+ * @description Document workspace block-level editor (Notion style workspace).
+ * Serves authentication, auto-save status indicators, and Gemini AI blocks.
+ * Maintains state variables and rich text parsing rules.
+ */
 interface BlockEditorProps {
   item: WorkspaceItem;
   onChangeItem: (updatedItem: WorkspaceItem) => void;
   onTriggerAi: (prompt: string, blockIndex: number) => void;
   isAiLoading: boolean;
+  onOpenNotebook?: () => void;
 }
 
 export default function BlockEditor({
   item,
   onChangeItem,
   onTriggerAi,
-  isAiLoading
+  isAiLoading,
+  onOpenNotebook
 }: BlockEditorProps) {
   const [blocks, setBlocks] = useState<EditorBlock[]>(item.blocks || []);
   const [activeBlockIndex, setActiveBlockIndex] = useState<number | null>(null);
@@ -176,17 +187,27 @@ export default function BlockEditor({
       
       {/* Upper Navigation / Document Stats Bar */}
       <div className="px-8 py-4 border-b border-[#f0f5f2] flex justify-between items-center bg-[#fafdfb]">
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-3">
           <BookOpen className="w-4 h-4 text-brand-600" />
           <span className="text-xs font-semibold text-gray-500 uppercase tracking-wider">
             Workspace Documento
           </span>
+          
+          {/* Botão Caderno Inteligente */}
+          <button
+            type="button"
+            id="central-notebook-btn"
+            onClick={onOpenNotebook}
+            className="ml-4 px-3 py-1 bg-brand-600 hover:bg-brand-700 text-white font-bold text-[11px] rounded-xl flex items-center gap-1.5 shadow-sm shadow-brand-600/10 transition-all cursor-pointer hover:scale-[1.02] active:scale-[0.98]"
+          >
+            <BookOpen className="w-3.5 h-3.5 text-white" />
+            <span>Caderno Inteligente</span>
+          </button>
         </div>
         <div className="flex items-center gap-2">
-          <span className="text-[10px] text-brand-700 bg-brand-50 border border-brand-100 font-semibold px-2 py-0.5 rounded-full">
-            Salvamento Automático Ativo
+          <span className="text-[10px] text-gray-450 font-semibold bg-white border border-gray-200 px-2.5 py-1 rounded-xl">
+            Modo Edição Notion-style
           </span>
-          <span className="w-2 h-2 rounded-full bg-emerald-500 animate-ping" />
         </div>
       </div>
 
@@ -346,6 +367,198 @@ export default function BlockEditor({
                     />
                   </div>
                 )}
+
+                {/* 
+                  SISTEMA DE EDITOR DE BLOCOS:
+                  Bloco de Imagem com pré-visualização e suporte a links externos.
+                */}
+                {block.type === "image" && (
+                  <div className="space-y-2 p-3 bg-gray-50/70 border border-gray-150 rounded-xl">
+                    <div className="flex items-center gap-1.5 text-[9px] uppercase font-bold text-gray-400">
+                      <Image className="w-3 h-3 text-brand-600" />
+                      <span>Bloco de Imagem</span>
+                    </div>
+                    <input 
+                      type="text" 
+                      placeholder="Cole a URL externa de uma imagem ou fotografia..." 
+                      value={block.content}
+                      onChange={(e) => handleBlockChange(index, e.target.value)}
+                      className="w-full bg-white border border-gray-200 focus:border-brand-500 rounded-lg px-2.5 py-1 text-xs outline-none"
+                    />
+                    {block.content && (
+                      <div className="relative rounded-lg overflow-hidden border border-gray-100 shadow-sm max-w-lg">
+                        <img 
+                          src={block.content} 
+                          alt="Visual render" 
+                          referrerPolicy="no-referrer"
+                          className="w-full max-h-60 object-cover block"
+                          onError={(e) => { 
+                            e.currentTarget.src = "https://images.unsplash.com/photo-1516962215378-7fa2e137ae93?auto=format&fit=crop&w=300&q=80"; 
+                          }}
+                        />
+                      </div>
+                    )}
+                  </div>
+                )}
+
+                {/* 
+                  SISTEMA DE EDITOR DE BLOCOS:
+                  Tabela modular interativa para anotações organizadas por células.
+                */}
+                {block.type === "table" && (
+                  <div className="space-y-2.5 p-3 bg-gray-50/70 border border-gray-150 rounded-xl overflow-x-auto text-xs">
+                    <div className="flex items-center gap-1.5 text-[9px] uppercase font-bold text-gray-400">
+                      <TableIcon className="w-3.5 h-3.5 text-[#064e3b]" />
+                      <span>Tabela Dinâmica</span>
+                    </div>
+                    <table className="min-w-full border-collapse border border-gray-200 bg-white">
+                      <tbody>
+                        {(block.rows || [["Cabeçalho 1", "Cabeçalho 2"], ["Célula 1", "Célula 2"]]).map((row, rIdx) => (
+                          <tr key={rIdx}>
+                            {row.map((cell, cIdx) => (
+                              <td key={cIdx} className="border border-gray-200 p-1 bg-white">
+                                <input 
+                                  type="text" 
+                                  value={cell} 
+                                  onChange={(e) => {
+                                    const defaultRows = block.rows || [["Cabeçalho 1", "Cabeçalho 2"], ["Célula 1", "Célula 2"]];
+                                    const updatedRows = [...defaultRows];
+                                    updatedRows[rIdx][cIdx] = e.target.value;
+                                    const updated = [...blocks];
+                                    updated[index].rows = updatedRows;
+                                    setBlocks(updated);
+                                    updateParent(updated);
+                                  }}
+                                  className="w-full bg-transparent border-none outline-none font-sans text-xs focus:ring-0 p-0 text-gray-750"
+                                />
+                              </td>
+                            ))}
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                    <div className="flex gap-2">
+                      <button 
+                        type="button"
+                        onClick={() => {
+                          const defaultRows = block.rows || [["Cabeçalho 1", "Cabeçalho 2"], ["Célula 1", "Célula 2"]];
+                          const newRow = Array(defaultRows[0].length).fill("");
+                          const updatedRows = [...defaultRows, newRow];
+                          const updated = [...blocks];
+                          updated[index].rows = updatedRows;
+                          setBlocks(updated);
+                          updateParent(updated);
+                        }}
+                        className="bg-white border text-[10px] font-bold px-2 py-0.5 rounded-md hover:bg-gray-100 text-gray-600"
+                      >
+                        + Adicionar Linha
+                      </button>
+                      <button 
+                        type="button"
+                        onClick={() => {
+                          const defaultRows = block.rows || [["Cabeçalho 1", "Cabeçalho 2"], ["Célula 1", "Célula 2"]];
+                          const updatedRows = defaultRows.map(row => [...row, ""]);
+                          const updated = [...blocks];
+                          updated[index].rows = updatedRows;
+                          setBlocks(updated);
+                          updateParent(updated);
+                        }}
+                        className="bg-white border text-[10px] font-bold px-2 py-0.5 rounded-md hover:bg-gray-100 text-gray-600"
+                      >
+                        + Adicionar Coluna
+                      </button>
+                    </div>
+                  </div>
+                )}
+
+                {/* 
+                  SISTEMA DE EDITOR DE BLOCOS:
+                  Visualização de vídeos externos (Youtube, Vimeo, etc.) integrados ao espaço.
+                */}
+                {block.type === "video" && (
+                  <div className="space-y-2 p-3 bg-gray-50/70 border border-gray-150 rounded-xl">
+                    <div className="flex items-center gap-1.5 text-[9px] uppercase font-bold text-gray-400">
+                      <Video className="w-3.5 h-3.5 text-blue-600" />
+                      <span>Módulo de Vídeo</span>
+                    </div>
+                    <input 
+                      type="text" 
+                      placeholder="Cole URL do YouTube (Ex: https://www.youtube.com/watch?v=dQw4w9WgXcQ)..." 
+                      value={block.content}
+                      onChange={(e) => handleBlockChange(index, e.target.value)}
+                      className="w-full bg-white border border-gray-200 focus:border-brand-500 rounded-lg px-2.5 py-1 text-xs outline-none"
+                    />
+                    {block.content && (
+                      <div className="relative pt-[56.25%] bg-black rounded-lg overflow-hidden border">
+                        <iframe 
+                          className="absolute inset-0 w-full h-full border-none"
+                          src={block.content.includes("watch?v=") ? `https://www.youtube.com/embed/${block.content.split("v=")[1]}` : block.content}
+                          title="Embedded Video player"
+                          referrerPolicy="no-referrer"
+                        />
+                      </div>
+                    )}
+                  </div>
+                )}
+
+                {/* 
+                  SISTEMA DE INTEGRAÇÃO IA GEMINI:
+                  Prompt inteligente que gera conteúdos ou brainstorming e injeta no fluxo.
+                */}
+                {block.type === "ia" && (
+                  <div className="space-y-2.5 p-3 bg-gradient-to-r from-emerald-500/5 to-teal-500/5 border border-brand-500/10 rounded-xl">
+                    <div className="flex items-center gap-1.5 text-[9px] font-bold text-brand-850 uppercase tracking-widest">
+                      <Sparkles className="w-3.5 h-3.5 text-brand-600 animate-pulse" />
+                      <span>Perguntar à IA Copiloto</span>
+                    </div>
+                    <div className="flex gap-2">
+                      <input 
+                        type="text" 
+                        placeholder="Ex: Crie um parágrafo resumindo as vantagens do modelo assíncrono..." 
+                        value={block.content}
+                        onChange={(e) => handleBlockChange(index, e.target.value)}
+                        className="flex-1 bg-white border border-gray-250 focus:border-brand-500 rounded-xl px-2.5 py-1 text-xs outline-none"
+                      />
+                      <button 
+                        type="button"
+                        onClick={() => onTriggerAi(`Gere um texto rico e refinado baseado no seguinte prompt: ${block.content}`, index)}
+                        disabled={isAiLoading}
+                        className="bg-brand-600 hover:bg-brand-700 text-white font-bold text-xs py-1 px-3 rounded-xl shadow-xs transition-colors cursor-pointer"
+                      >
+                        {isAiLoading ? "Pensando..." : "Gerar com IA"}
+                      </button>
+                    </div>
+                  </div>
+                )}
+
+                {/* 
+                  SISTEMA DE CADERNO INTELIGENTE:
+                  Portão inline para folhear cadernos, organizar ideias ou tarefas em mídias.
+                */}
+                {block.type === "notebook" && (
+                  <div className="p-4 bg-[#fbfdfc] border border-brand-100 rounded-2xl shadow-xs space-y-3">
+                    <div className="flex items-center justify-between border-b border-[#eaf3ee] pb-2">
+                      <div className="flex items-center gap-1.5">
+                        <BookOpen className="w-4 h-4 text-brand-600" />
+                        <span className="text-[10px] font-black text-[#064e3b] uppercase tracking-wider">Módulo de Caderno Integrado</span>
+                      </div>
+                      <button 
+                        type="button" 
+                        onClick={onOpenNotebook}
+                        className="text-[10px] font-bold text-[#064e3b] hover:bg-brand-100 bg-brand-50 border border-brand-100 px-2 py-0.5 rounded-lg transition-all"
+                      >
+                        Abrir Páginas Organizadas ↗
+                      </button>
+                    </div>
+                    <p className="text-[11px] text-gray-500 leading-normal">
+                      Páginas inteligentes de escopo Notion/OneNote. Crie múltiplas folhas, checklists, ordene, e faça rascunhos de alta fidelidade.
+                    </p>
+                    <div className="bg-white p-3 rounded-xl border border-gray-150 grid grid-cols-2 gap-2 text-[10px] font-bold text-gray-600">
+                      <span>📖 Folhas no Caderno: {item.notebookPages?.length || 0}</span>
+                      <span className="text-emerald-700">✓ Auto Save Ativo</span>
+                    </div>
+                  </div>
+                )}
               </div>
 
               {/* AI prompt quick-trigger floating menu on right hover */}
@@ -389,88 +602,164 @@ export default function BlockEditor({
               top: `${cursorPosition.top}px`, 
               left: `${cursorPosition.left}px` 
             }}
-            className="w-60 bg-white rounded-xl border border-gray-150 shadow-2xl py-1.5 z-50 text-xs font-sans max-h-60 overflow-y-auto animate-fade-in-up"
+            className="w-64 bg-white rounded-2xl border border-gray-150 shadow-2xl py-2 z-50 text-xs font-sans max-h-80 overflow-y-auto animate-fade-in-up"
           >
-            <div className="px-3 py-1 text-[9px] font-bold text-gray-400 uppercase tracking-widest border-b border-gray-50 pb-1.5 mb-1 flex items-center justify-between">
-              <span>Formatação em Bloco</span>
+            <div className="px-3.5 py-1 text-[9px] font-bold text-gray-400 uppercase tracking-widest border-b border-gray-50 pb-2 mb-1 flex items-center justify-between">
+              <span>Inserir Bloco</span>
               <span>“/”</span>
             </div>
 
+            {/* 1. Texto Normal */}
             <button
               onClick={() => setBlockType(slashMenuIndex, "paragraph")}
-              className="w-full px-3 py-2 text-left hover:bg-gray-50 flex items-center gap-2.5 text-gray-700"
+              className="w-full px-3.5 py-2 text-left hover:bg-gray-50 flex items-center gap-3 text-gray-700"
             >
-              <div className="w-6 h-6 rounded bg-gray-50 flex items-center justify-center text-gray-600">
-                <AlignLeft className="w-3.5 h-3.5" />
+              <div className="w-7 h-7 rounded-lg bg-gray-50 flex items-center justify-center text-gray-600">
+                <AlignLeft className="w-4 h-4" />
               </div>
               <div>
-                <span className="font-semibold block leading-tight">Texto Normal</span>
-                <span className="text-[9.5px] text-gray-400 block mt-0.5">Comece a digitar seu texto</span>
+                <span className="font-bold block leading-none">Texto Normal</span>
+                <span className="text-[9px] text-gray-400 block mt-0.5">Comece a digitar seu texto</span>
               </div>
             </button>
 
+            {/* 2. Título Principal */}
             <button
               onClick={() => setBlockType(slashMenuIndex, "h1")}
-              className="w-full px-3 py-2 text-left hover:bg-gray-50 flex items-center gap-2.5 text-gray-700 border-t border-gray-50"
+              className="w-full px-3.5 py-2 text-left hover:bg-gray-50 flex items-center gap-3 text-gray-700 border-t border-gray-50/50"
             >
-              <div className="w-6 h-6 rounded bg-blue-50 flex items-center justify-center text-blue-600">
-                <Heading1 className="w-3.5 h-3.5" />
+              <div className="w-7 h-7 rounded-lg bg-blue-50 flex items-center justify-center text-blue-600">
+                <Heading1 className="w-4 h-4" />
               </div>
               <div>
-                <span className="font-semibold block leading-tight">Título Principal</span>
-                <span className="text-[9.5px] text-gray-400 block mt-0.5">Título tamanho grande h1</span>
+                <span className="font-bold block leading-none">Título Principal</span>
+                <span className="text-[9px] text-gray-400 block mt-0.5">Título grande h1</span>
               </div>
             </button>
 
+            {/* 3. Subtítulo Secundário */}
             <button
               onClick={() => setBlockType(slashMenuIndex, "h2")}
-              className="w-full px-3 py-2 text-left hover:bg-gray-50 flex items-center gap-2.5 text-gray-700 border-t border-gray-50"
+              className="w-full px-3.5 py-2 text-left hover:bg-gray-50 flex items-center gap-3 text-gray-700 border-t border-gray-50/50"
             >
-              <div className="w-6 h-6 rounded bg-indigo-50 flex items-center justify-center text-indigo-600">
-                <Heading2 className="w-3.5 h-3.5" />
+              <div className="w-7 h-7 rounded-lg bg-indigo-50 flex items-center justify-center text-indigo-600">
+                <Heading2 className="w-4 h-4" />
               </div>
               <div>
-                <span className="font-semibold block leading-tight">Subtítulo Secundário</span>
-                <span className="text-[9.5px] text-gray-400 block mt-0.5">Subtítulo médio h2</span>
+                <span className="font-bold block leading-none">Subtítulo Secundário</span>
+                <span className="text-[9px] text-gray-400 block mt-0.5">Subtítulo médio h2</span>
               </div>
             </button>
 
+            {/* 4. Lista de Tarefas */}
             <button
               onClick={() => setBlockType(slashMenuIndex, "todo")}
-              className="w-full px-3 py-2 text-left hover:bg-gray-50 flex items-center gap-2.5 text-gray-700 border-t border-gray-50"
+              className="w-full px-3.5 py-2 text-left hover:bg-gray-50 flex items-center gap-3 text-gray-700 border-t border-gray-50/50"
             >
-              <div className="w-6 h-6 rounded bg-emerald-50 flex items-center justify-center text-emerald-600">
-                <CheckSquare className="w-3.5 h-3.5" />
+              <div className="w-7 h-7 rounded-lg bg-emerald-50 flex items-center justify-center text-emerald-600">
+                <CheckSquare className="w-4 h-4" />
               </div>
               <div>
-                <span className="font-semibold block leading-tight">Lista de Tarefas</span>
-                <span className="text-[9.5px] text-gray-400 block mt-0.5">Checklist interativo de meta</span>
+                <span className="font-bold block leading-none">Lista de Tarefas (Checklist)</span>
+                <span className="text-[9px] text-gray-400 block mt-0.5">Checklist interativo de metas</span>
               </div>
             </button>
 
+            {/* 5. Imagem */}
+            <button
+              onClick={() => setBlockType(slashMenuIndex, "image")}
+              className="w-full px-3.5 py-2 text-left hover:bg-gray-50 flex items-center gap-3 text-gray-700 border-t border-gray-50/50"
+            >
+              <div className="w-7 h-7 rounded-lg bg-rose-50 flex items-center justify-center text-rose-600">
+                <Image className="w-4 h-4" />
+              </div>
+              <div>
+                <span className="font-bold block leading-none">Imagem Externa</span>
+                <span className="text-[9px] text-gray-400 block mt-0.5">Cole link ou anexe fotografia</span>
+              </div>
+            </button>
+
+            {/* 6. Tabela Dinâmica */}
+            <button
+              onClick={() => setBlockType(slashMenuIndex, "table")}
+              className="w-full px-3.5 py-2 text-left hover:bg-gray-50 flex items-center gap-3 text-gray-700 border-t border-gray-50/50"
+            >
+              <div className="w-7 h-7 rounded-lg bg-teal-50 flex items-center justify-center text-teal-600">
+                <TableIcon className="w-4 h-4" />
+              </div>
+              <div>
+                <span className="font-bold block leading-none">Tabela Dinâmica</span>
+                <span className="text-[9px] text-gray-400 block mt-0.5">Crie colunas e linhas editáveis</span>
+              </div>
+            </button>
+
+            {/* 7. Bloco de Código */}
             <button
               onClick={() => setBlockType(slashMenuIndex, "code")}
-              className="w-full px-3 py-2 text-left hover:bg-gray-50 flex items-center gap-2.5 text-gray-700 border-t border-gray-50"
+              className="w-full px-3.5 py-2 text-left hover:bg-gray-50 flex items-center gap-3 text-gray-700 border-t border-gray-50/50"
             >
-              <div className="w-6 h-6 rounded bg-red-50 flex items-center justify-center text-red-600">
-                <Code className="w-3.5 h-3.5" />
+              <div className="w-7 h-7 rounded-lg bg-gray-100 flex items-center justify-center text-gray-750">
+                <Code className="w-4 h-4" />
               </div>
               <div>
-                <span className="font-semibold block leading-tight">Bloco de Código</span>
-                <span className="text-[9.5px] text-gray-400 block mt-0.5">Janela de script terminal</span>
+                <span className="font-bold block leading-none">Bloco de Código</span>
+                <span className="text-[9px] text-gray-400 block mt-0.5">Terminal de script ou programação</span>
               </div>
             </button>
 
+            {/* 8. Vídeo */}
             <button
-              onClick={() => setBlockType(slashMenuIndex, "list")}
-              className="w-full px-3 py-2 text-left hover:bg-gray-50 flex items-center gap-2.5 text-gray-700 border-t border-gray-50"
+              onClick={() => setBlockType(slashMenuIndex, "video")}
+              className="w-full px-3.5 py-2 text-left hover:bg-gray-50 flex items-center gap-3 text-gray-700 border-t border-gray-50/50"
             >
-              <div className="w-6 h-6 rounded bg-amber-50 flex items-center justify-center text-amber-600">
-                <List className="w-3.5 h-3.5" />
+              <div className="w-7 h-7 rounded-lg bg-[#eff6ff] flex items-center justify-center text-blue-650">
+                <Video className="w-4 h-4" />
               </div>
               <div>
-                <span className="font-semibold block leading-tight">Marcadores</span>
-                <span className="text-[9.5px] text-gray-400 block mt-0.5">Lista com bullet points</span>
+                <span className="font-bold block leading-none">Vídeo Incorporado</span>
+                <span className="text-[9px] text-gray-400 block mt-0.5">Video Player Youtube ou Vimeo</span>
+              </div>
+            </button>
+
+            {/* 9. Marcadores */}
+            <button
+              onClick={() => setBlockType(slashMenuIndex, "list")}
+              className="w-full px-3.5 py-2 text-left hover:bg-gray-50 flex items-center gap-3 text-gray-700 border-t border-gray-50/50"
+            >
+              <div className="w-7 h-7 rounded-lg bg-amber-50 flex items-center justify-center text-amber-600">
+                <List className="w-4 h-4" />
+              </div>
+              <div>
+                <span className="font-bold block leading-none">Marcadores (Bullets)</span>
+                <span className="text-[9px] text-gray-400 block mt-0.5">Lista de itens marcados</span>
+              </div>
+            </button>
+
+            {/* 10. IA Copiloto */}
+            <button
+              onClick={() => setBlockType(slashMenuIndex, "ia")}
+              className="w-full px-3.5 py-2 text-left hover:bg-gray-50 flex items-center gap-3 text-gray-700 border-t border-gray-50/50"
+            >
+              <div className="w-7 h-7 rounded-lg bg-purple-50 flex items-center justify-center text-purple-600 animate-pulse">
+                <Sparkles className="w-4 h-4" />
+              </div>
+              <div>
+                <span className="font-bold block leading-none">Bloco Copiloto Gemini IA</span>
+                <span className="text-[9px] text-gray-400 block mt-0.5">Pergunte à IA e gere rascunhos</span>
+              </div>
+            </button>
+
+            {/* 11. Caderno Inteligente */}
+            <button
+              onClick={() => setBlockType(slashMenuIndex, "notebook")}
+              className="w-full px-3.5 py-2 text-left hover:bg-gray-50 flex items-center gap-3 text-gray-700 border-t border-[#eaf3ee]"
+            >
+              <div className="w-7 h-7 rounded-lg bg-emerald-100 flex items-center justify-center text-emerald-850">
+                <BookOpen className="w-4 h-4" />
+              </div>
+              <div>
+                <span className="font-bold block leading-none text-[#064e3b]">Caderno Inteligente</span>
+                <span className="text-[9px] text-gray-400 block mt-0.5">Páginas multi-folhas reais</span>
               </div>
             </button>
           </div>
