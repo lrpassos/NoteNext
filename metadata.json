@@ -1,0 +1,6 @@
+{
+  "name": "NoteNext",
+  "description": "SaaS minimalista premium de produtividade visual inspirado no Notion, Google Keep e Milanote com IA integrada.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
