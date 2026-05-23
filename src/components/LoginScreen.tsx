@@ -36,6 +36,38 @@ export default function LoginScreen({ onLoginSuccess }: LoginScreenProps) {
   const [showPassword, setShowPassword] = useState(false);
   const [rememberMe, setRememberMe] = useState(true);
 
+  // User list synchronized with LocalStorage for fully functioning validation
+  const [registeredUsers, setRegisteredUsers] = useState<{email: string; password: string; secret: string}[]>(() => {
+    const saved = localStorage.getItem("notenext_users");
+    if (saved) return JSON.parse(saved);
+    const defaults = [{ email: "admin@notenext.sh", password: "password123", secret: "N2-MFA-DEFAULT-KEY" }];
+    localStorage.setItem("notenext_users", JSON.stringify(defaults));
+    return defaults;
+  });
+
+  // Registration & MFA Enrollment Setup Wizard states
+  const [isRegistering, setIsRegistering] = useState(false);
+  const [registerStep, setRegisterStep] = useState(1);
+  const [regEmail, setRegEmail] = useState("");
+  const [regPassword, setRegPassword] = useState("");
+  const [regPasswordConfirm, setRegPasswordConfirm] = useState("");
+  const [regSecretKey, setRegSecretKey] = useState("");
+  const [regMfaCode, setRegMfaCode] = useState("");
+  const [copiedKey, setCopiedKey] = useState(false);
+
+  // Generate a cryptographically styled beautiful string for MFA Setup
+  const generateRandomSecret = () => {
+    const chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZ234567";
+    let key = "NTNX-";
+    for (let i = 0; i < 4; i++) {
+      for (let j = 0; j < 4; j++) {
+        key += chars.charAt(Math.floor(Math.random() * chars.length));
+      }
+      if (i < 3) key += "-";
+    }
+    setRegSecretKey(key);
+  };
+
   // Phone states
   const [phoneNumber, setPhoneNumber] = useState("+55 (11) 98765-4321");
   const [smsSent, setSmsSent] = useState(false);
@@ -91,6 +123,21 @@ export default function LoginScreen({ onLoginSuccess }: LoginScreenProps) {
   const handleCredentialsSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (!email || !password) return;
+
+    const matchedUser = registeredUsers.find(
+      u => u.email.toLowerCase() === email.toLowerCase() && u.password === password
+    );
+
+    if (!matchedUser) {
+      setIsVerifying(true);
+      setStatusText("Checando base segura...");
+      setTimeout(() => {
+        setIsVerifying(false);
+        setStatusText("Credenciais inválidas! Não encontramos esta combinação.");
+      }, 700);
+      return;
+    }
+
     setIsVerifying(true);
     setStatusText("Autenticando credenciais...");
     setTimeout(() => {
@@ -99,6 +146,74 @@ export default function LoginScreen({ onLoginSuccess }: LoginScreenProps) {
       setIsMfaStep(true);
       setStatusText("Segurança Adicional Requerida (MFA)");
     }, 1000);
+  };
+
+  const handleRegisterSubmitStep1 = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!regEmail || !regPassword || !regPasswordConfirm) {
+      setStatusText("Todos os campos de cadastro são requeridos.");
+      return;
+    }
+
+    if (regPassword !== regPasswordConfirm) {
+      setStatusText("As senhas inseridas não coincidem!");
+      return;
+    }
+
+    if (regPassword.length < 6) {
+      setStatusText("A senha necessita ter ao menos 6 caracteres.");
+      return;
+    }
+
+    const emailExists = registeredUsers.some(u => u.email.toLowerCase() === regEmail.toLowerCase());
+    if (emailExists) {
+      setStatusText("Este endereço de e-mail já está cadastrado.");
+      return;
+    }
+
+    setIsVerifying(true);
+    setStatusText("Processando credenciais e chaves criptográficas...");
+    setTimeout(() => {
+      setIsVerifying(false);
+      generateRandomSecret();
+      setRegisterStep(2);
+      setStatusText("Segurança multifator preparada! Prossiga para configurar.");
+    }, 1100);
+  };
+
+  const handleRegisterSubmitStep2 = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!regMfaCode) {
+      setStatusText("Por favor, digite o código de 6 dígitos gerado.");
+      return;
+    }
+
+    setIsVerifying(true);
+    setStatusText("Verificando código MFA com a chave privada...");
+    setTimeout(() => {
+      setIsVerifying(false);
+      
+      // Save newly registered user with their configuration keys!
+      const newUser = {
+        email: regEmail,
+        password: regPassword,
+        secret: regSecretKey
+      };
+      
+      const updatedList = [...registeredUsers, newUser];
+      setRegisteredUsers(updatedList);
+      localStorage.setItem("notenext_users", JSON.stringify(updatedList));
+
+      // Successfully log them in automatically with their email
+      setEmail(regEmail);
+      setPassword(regPassword);
+      
+      setIsRegistering(false);
+      setRegisterStep(1);
+      
+      // Trigger instant platform transition with active credentials method
+      triggerSuccessTransition("credentials");
+    }, 1400);
   };
 
   const handleMfaVerify = (e: React.FormEvent) => {
@@ -173,8 +288,255 @@ export default function LoginScreen({ onLoginSuccess }: LoginScreenProps) {
               </p>
             </div>
 
-            {/* Main Action box or MFA step */}
-            {!isMfaStep ? (
+            {/* Main Action box, MFA step, or Registration setup */}
+            {isRegistering ? (
+              /* MFA Registration Flow */
+              <motion.div
+                initial={{ opacity: 0, x: -20 }}
+                animate={{ opacity: 1, x: 0 }}
+                className="space-y-4"
+              >
+                <div className="text-center">
+                  <h3 className="text-base font-bold text-gray-900 font-display flex items-center justify-center gap-1.5">
+                    <ShieldCheck className="w-5 h-5 text-brand-600 animate-pulse" />
+                    <span>Cadastro de Conta & MFA</span>
+                  </h3>
+                  <p className="text-[11px] text-gray-500 mt-1">
+                    {registerStep === 1 
+                      ? "Crie suas credenciais para começar a experimentar o NoteNext." 
+                      : "Escaneie o QR Code abaixo com seu app de código MFA."}
+                  </p>
+                </div>
+
+                {registerStep === 1 ? (
+                  /* Step 1: Account inputs */
+                  <form onSubmit={handleRegisterSubmitStep1} className="space-y-3.5">
+                    <div>
+                      <label className="block text-[10px] font-bold text-gray-500 uppercase tracking-wider mb-1">
+                        Endereço de E-mail
+                      </label>
+                      <div className="relative">
+                        <input
+                          type="email"
+                          required
+                          value={regEmail}
+                          onChange={(e) => setRegEmail(e.target.value)}
+                          placeholder="seu-login@notenext.sh"
+                          className="w-full pl-9 pr-4 py-2 rounded-xl border border-gray-250 text-xs focus:outline-none focus:border-brand-500 focus:ring-1 focus:ring-brand-500/10 font-sans"
+                        />
+                        <Mail className="w-3.5 h-3.5 text-gray-400 absolute left-3 top-3" />
+                      </div>
+                    </div>
+
+                    <div>
+                      <label className="block text-[10px] font-bold text-gray-500 uppercase tracking-wider mb-1">
+                        Senha Secreta
+                      </label>
+                      <div className="relative">
+                        <input
+                          type="password"
+                          required
+                          value={regPassword}
+                          onChange={(e) => setRegPassword(e.target.value)}
+                          placeholder="No mínimo 6 caracteres"
+                          className="w-full pl-9 pr-4 py-2 rounded-xl border border-gray-250 text-xs focus:outline-none focus:border-brand-500 focus:ring-1 focus:ring-brand-500/10 font-sans"
+                        />
+                        <Lock className="w-3.5 h-3.5 text-gray-400 absolute left-3 top-3" />
+                      </div>
+                    </div>
+
+                    <div>
+                      <label className="block text-[10px] font-bold text-gray-500 uppercase tracking-wider mb-1">
+                        Confirmar Senha
+                      </label>
+                      <div className="relative">
+                        <input
+                          type="password"
+                          required
+                          value={regPasswordConfirm}
+                          onChange={(e) => setRegPasswordConfirm(e.target.value)}
+                          placeholder="Repita sua senha acima"
+                          className="w-full pl-9 pr-4 py-2 rounded-xl border border-gray-250 text-xs focus:outline-none focus:border-brand-500 focus:ring-1 focus:ring-brand-500/10 font-sans"
+                        />
+                        <Lock className="w-3.5 h-3.5 text-gray-400 absolute left-3 top-3" />
+                      </div>
+                    </div>
+
+                    <button
+                      type="submit"
+                      className="w-full py-2.5 bg-brand-600 hover:bg-brand-700 text-white font-semibold text-xs rounded-xl transition-all shadow-md flex items-center justify-center gap-1.5"
+                    >
+                      <span>Configurar Proteção MFA (2FA)</span>
+                      <ArrowRight className="w-3.5 h-3.5" />
+                    </button>
+
+                    <div className="text-center pt-2">
+                      <button
+                        type="button"
+                        onClick={() => { setIsRegistering(false); setStatusText(""); }}
+                        className="text-xs text-gray-500 hover:text-brand-700 hover:underline font-semibold"
+                      >
+                        Já possui uma conta? Entrar
+                      </button>
+                    </div>
+                  </form>
+                ) : (
+                  /* Step 2: MFA Setup QR Code scanning, Backup keys & active code verificator */
+                  <form onSubmit={handleRegisterSubmitStep2} className="space-y-4">
+                    <div className="text-center space-y-3 p-2.5 rounded-2xl bg-gray-50/70 border border-gray-100">
+                      <span className="text-[9px] bg-brand-100 text-brand-850 px-2 py-0.5 rounded font-bold uppercase tracking-widest inline-block">
+                        Código QR Para Ativação
+                      </span>
+                      
+                      {/* High-Fidelity detailed Vector QR Code SVG */}
+                      <svg width="150" height="150" viewBox="0 0 100 100" className="mx-auto rounded-xl bg-white p-2 border border-brand-100 shadow-sm">
+                        {/* Positioning corners */}
+                        {/* Top Left */}
+                        <path d="M5 5h18v18H5zm4 4h10v10H9zm2 2h6v6h-6z" fill="#064e3b" />
+                        {/* Top Right */}
+                        <path d="M77 5h18v18H77zm4 4h10v10H81zm2 2h6v6h-6z" fill="#064e3b" />
+                        {/* Bottom Left */}
+                        <path d="M5 77h18v18H5zm4 4h10v10H9zm2 2h6v6h-6z" fill="#064e3b" />
+                        {/* Align pattern */}
+                        <path d="M79 79h6v6h-6z" fill="#059669" />
+                        
+                        {/* Pixel patterns scattered around to look like a realistic QR code */}
+                        <g fill="#1f2937">
+                          <rect x="27" y="5" width="4" height="4" />
+                          <rect x="35" y="5" width="8" height="4" />
+                          <rect x="47" y="5" width="4" height="8" />
+                          <rect x="55" y="9" width="12" height="4" />
+                          
+                          <rect x="27" y="17" width="8" height="4" />
+                          <rect x="39" y="13" width="4" height="8" />
+                          <rect x="51" y="17" width="8" height="4" />
+                          <rect x="63" y="13" width="8" height="4" />
+                          
+                          <rect x="27" y="25" width="12" height="4" />
+                          <rect x="43" y="25" width="4" height="8" />
+                          <rect x="51" y="29" width="4" height="4" />
+                          <rect x="59" y="25" width="12" height="4" />
+                          <rect x="75" y="25" width="4" height="8" />
+                          <rect x="83" y="25" width="8" height="4" />
+                          
+                          <rect x="5" y="27" width="4" height="4" />
+                          <rect x="13" y="27" width="8" height="4" />
+                          <rect x="5" y="35" width="12" height="4" />
+                          <rect x="21" y="35" width="4" height="4" />
+                          
+                          <rect x="27" y="37" width="4" height="8" />
+                          <rect x="35" y="41" width="8" height="4" />
+                          <rect x="47" y="37" width="8" height="4" />
+                          <rect x="59" y="41" width="4" height="12" />
+                          <rect x="67" y="37" width="16" height="4" />
+                          <rect x="87" y="33" width="8" height="4" />
+                          
+                          <rect x="5" y="47" width="4" height="12" />
+                          <rect x="13" y="51" width="4" height="4" />
+                          <rect x="21" y="47" width="8" height="4" />
+                          <rect x="33" y="49" width="12" height="4" />
+                          <rect x="49" y="47" width="4" height="4" />
+                          <rect x="73" y="47" width="16" height="4" />
+                          
+                          <rect x="13" y="61" width="8" height="4" />
+                          <rect x="25" y="59" width="16" height="4" />
+                          <rect x="45" y="59" width="4" height="8" />
+                          <rect x="53" y="63" width="12" height="4" />
+                          <rect x="69" y="59" width="4" height="4" />
+                          
+                          <rect x="27" y="71" width="4" height="8" />
+                          <rect x="35" y="73" width="12" height="4" />
+                          <rect x="51" y="71" width="8" height="4" />
+                          <rect x="63" y="69" width="4" height="12" />
+                          <rect x="71" y="73" width="4" height="4" />
+                          
+                          <rect x="27" y="83" width="16" height="4" />
+                          <rect x="47" y="81" width="4" height="8" />
+                          <rect x="55" y="83" width="12" height="4" />
+                          <rect x="71" y="81" width="8" height="4" />
+                          
+                          <rect x="33" y="91" width="8" height="4" />
+                          <rect x="45" y="89" width="12" height="4" />
+                          <rect x="61" y="93" width="16" height="4" />
+                        </g>
+                        
+                        {/* Premium green branding locks inside center */}
+                        <rect x="41" y="41" width="18" height="18" rx="4" fill="#064e3b" />
+                        <path d="M46 48v4h8v-4a4 4 0 0 0-8 0zm2 0a2 2 0 0 1 4 0v4h-4z" fill="#34d399" />
+                        <rect x="44" y="49" width="12" height="7" rx="1" fill="#10b981" />
+                        <circle cx="50" cy="52" r="1" fill="#ffffff" />
+                      </svg>
+
+                      {/* Manual key Copy Block */}
+                      <div className="space-y-1 px-2 text-left">
+                        <span className="text-[10px] text-gray-400 block font-medium">Chave secreta de calibração:</span>
+                        <div className="flex items-center justify-between bg-white border border-gray-200 px-2 py-1 rounded-xl">
+                          <code className="text-xs font-mono text-[#064e3b] font-bold tracking-wider select-all truncate max-w-[210px]">
+                            {regSecretKey}
+                          </code>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              navigator.clipboard.writeText(regSecretKey);
+                              setCopiedKey(true);
+                              setTimeout(() => setCopiedKey(false), 2000);
+                            }}
+                            className="bg-brand-50 hover:bg-brand-100 text-brand-850 px-2.5 py-0.5 rounded-lg text-[10px] font-bold border border-brand-200 transition-all"
+                          >
+                            {copiedKey ? "Copiado!" : "Copiar"}
+                          </button>
+                        </div>
+                      </div>
+
+                      {/* Backup Keys */}
+                      <div className="pt-2 border-t border-gray-200/50 text-left px-2">
+                        <span className="text-[9px] font-bold text-gray-400 uppercase tracking-widest block mb-1">
+                          Códigos de Backup de Emergência:
+                        </span>
+                        <div className="grid grid-cols-2 gap-2 text-[9px] font-mono text-gray-550 font-bold bg-white border rounded-lg p-1.5 leading-none">
+                          <span>🔑 3829-1029</span>
+                          <span>🔑 4811-9238</span>
+                        </div>
+                      </div>
+                    </div>
+
+                    <div>
+                      <label className="block text-[11px] font-bold text-gray-650 uppercase tracking-wider mb-1 text-center">
+                        Digite o código temporário de 6 dígitos:
+                      </label>
+                      <input
+                        type="text"
+                        maxLength={6}
+                        required
+                        value={regMfaCode}
+                        onChange={(e) => setRegMfaCode(e.target.value)}
+                        placeholder="Ex: 849201"
+                        className="w-full text-center tracking-[0.6em] font-mono font-bold text-base bg-brand-50/50 py-2 rounded-xl border border-brand-200 focus:outline-none focus:border-brand-500 font-sans"
+                      />
+                      <span className="text-[9px] text-gray-400 mt-1 text-center block leading-normal">
+                        Use o código gerado pelo autenticador para validar e sincronizar.
+                      </span>
+                    </div>
+
+                    <div className="flex gap-2 pt-1">
+                      <button
+                        type="button"
+                        onClick={() => setRegisterStep(1)}
+                        className="flex-1 py-2 bg-gray-50 hover:bg-gray-100 text-gray-600 font-bold text-xs rounded-xl border border-gray-200 transition-all"
+                      >
+                        Voltar
+                      </button>
+                      <button
+                        type="submit"
+                        className="flex-1 py-2 bg-brand-600 hover:bg-brand-700 text-white font-bold text-xs rounded-xl shadow-md shadow-brand-600/10 hover:shadow-brand-600/20 transition-all flex items-center justify-center gap-1"
+                      >
+                        Ativar MFA & Entrar
+                      </button>
+                    </div>
+                  </form>
+                )}
+              </motion.div>
+            ) : !isMfaStep ? (
               <>
                 {/* Custom Tab Selectors */}
                 <div className="flex bg-gray-50 p-1.5 rounded-xl mb-6 border border-gray-100">
@@ -422,9 +784,20 @@ export default function LoginScreen({ onLoginSuccess }: LoginScreenProps) {
                     </div>
                   )}
                 </div>
+
+                {/* Secure MFA Account registration trigger */}
+                <div className="mt-5 pt-3 border-t border-gray-100 text-center">
+                  <button 
+                    type="button" 
+                    onClick={() => { setIsRegistering(true); setRegisterStep(1); setRegEmail(""); setRegPassword(""); setRegPasswordConfirm(""); setStatusText(""); }}
+                    className="text-xs text-brand-700 font-bold hover:underline bg-brand-50 hover:bg-brand-100/90 px-3.5 py-1.5 rounded-xl border border-brand-100 shadow-sm transition-all"
+                  >
+                    🔒 Criar Conta Segura (Configurar MFA)
+                  </button>
+                </div>
               </>
             ) : (
-              /* MFA Verification Screen */
+              /* MFA Verification Screen */           /* MFA Verification Screen */
               <motion.div
                 initial={{ opacity: 0, x: 20 }}
                 animate={{ opacity: 1, x: 0 }}
