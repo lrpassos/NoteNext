@@ -46,6 +46,7 @@ interface SidebarProps {
   onCollapse: () => void;
   onDeleteItem: (id: string) => void;
   onUpdateCategories: (cats: WorkspaceCategory[]) => void;
+  onSelectSubcategory?: (subName: string, parentCatName: string) => void;
 }
 
 export default function Sidebar({
@@ -64,7 +65,8 @@ export default function Sidebar({
   onToggleWide,
   onCollapse,
   onDeleteItem,
-  onUpdateCategories
+  onUpdateCategories,
+  onSelectSubcategory
 }: SidebarProps) {
   const [showAddMenu, setShowAddMenu] = useState(false);
   const [searchVal, setSearchVal] = useState("");
@@ -388,10 +390,15 @@ export default function Sidebar({
                         <div className="space-y-1">
                           {subcats.map((sub) => (
                             <div key={sub.id} className="flex items-center justify-between text-xs py-0.5 group/sub bg-white border border-gray-100/40 rounded px-2 hover:bg-[#eaf3ee]/30">
-                              <span className="text-gray-650 font-medium truncate flex items-center gap-1.5 select-all">
-                                <span className="w-1 h-1 rounded-full bg-brand-500" />
+                              <button
+                                type="button"
+                                onClick={() => onSelectSubcategory?.(sub.name, cat.name)}
+                                className="text-gray-650 font-medium truncate flex-1 flex items-center gap-1.5 hover:text-brand-700 text-left cursor-pointer py-0.5"
+                                title={`Abrir área criativa "${sub.name}"`}
+                              >
+                                <span className="w-1.5 h-1.5 rounded-full bg-brand-500 flex-shrink-0" />
                                 <span className="truncate">{sub.name}</span>
-                              </span>
+                              </button>
                               <button
                                 type="button"
                                 onClick={(e) => {

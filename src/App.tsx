@@ -295,6 +295,60 @@ export default function App() {
     }
   };
 
+  const handleSelectSubcategory = (subName: string, parentCatName: string) => {
+    // De acordo com o pedido, a área estará dentro da categoria Produto
+    const targetCategory = "Produto";
+
+    // Garante que a categoria "Produto" existe na lista de categorias
+    setCategories(prev => {
+      const hasProd = prev.some(c => c.name.toLowerCase() === targetCategory.toLowerCase());
+      if (!hasProd) {
+        const nextCats = [
+          ...prev,
+          { id: `cat-prod-${Date.now()}`, name: targetCategory, color: "#0ea5e9", order: prev.length }
+        ];
+        localStorage.setItem("notenext_categories", JSON.stringify(nextCats));
+        return nextCats;
+      }
+      return prev;
+    });
+
+    // Procura por um workspace existente com o nome da subcategoria e sob "Produto"
+    const existing = items.find(
+      it => it.title.toLowerCase() === subName.toLowerCase() && it.category.toLowerCase() === targetCategory.toLowerCase()
+    );
+
+    if (existing) {
+      setActiveItemId(existing.id);
+      setActiveCategory(targetCategory);
+    } else {
+      // Cria uma nova área de trabalho (Notion style document) com o nome da subcategoria
+      const newItem: WorkspaceItem = {
+        id: `it-sub-${Math.random().toString(36).substring(2, 9)}`,
+        title: subName,
+        type: WorkspaceType.NOTION_DOC,
+        category: targetCategory,
+        isFavorite: false,
+        updatedAt: new Date().toLocaleString(),
+        blocks: [
+          {
+            id: `b-sub-1`,
+            type: "paragraph",
+            content: `Seja bem-vindo(a) à área de trabalho criativa **${subName}** sob a categoria **${targetCategory}**.\n\nExperimente adicionar novos blocos de notas, tarefas, ou cabeçalhos pressionando '/' no editor.`
+          }
+        ],
+        elements: [],
+        connections: [],
+        notes: []
+      };
+
+      const updated = [newItem, ...items];
+      saveItems(updated);
+      setActiveItemId(newItem.id);
+      setActiveCategory(targetCategory);
+    }
+  };
+
   // Bridge custom triggers from sub-components to Gemini on server-side using active agents instructions
   const handleTriggerAiFromContext = async (prompt: string, blockIndex: any) => {
     setIsAiLoading(true);
@@ -435,6 +489,7 @@ export default function App() {
           onCollapse={() => setIsSidebarCollapsed(true)}
           onDeleteItem={deleteCurrentWorkspace}
           onUpdateCategories={setCategories}
+          onSelectSubcategory={handleSelectSubcategory}
         />
       ) : (
         /* Floating Restore Menu Button on left edge when collapsed */
