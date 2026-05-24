@@ -72,13 +72,23 @@ export default function SaaSConfigPanel({
   // 1. Categories logic
   const handleSaveCategory = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!catNameInput.trim()) return;
+    const cleanName = catNameInput.trim();
+    if (!cleanName) return;
+
+    // Check duplicate categories
+    const isDup = categories.some(
+      c => c.id !== editingCatId && c.name.toLowerCase() === cleanName.toLowerCase()
+    );
+    if (isDup) {
+      alert(`O nome de categoria "${cleanName}" já está em uso. Crie categorias de nomes exclusivos.`);
+      return;
+    }
 
     if (editingCatId) {
       // Edit existing
       const updated = categories.map(c => {
         if (c.id === editingCatId) {
-          return { ...c, name: catNameInput.trim(), color: catColorInput };
+          return { ...c, name: cleanName, color: catColorInput };
         }
         return c;
       });
@@ -88,7 +98,7 @@ export default function SaaSConfigPanel({
       // Add new
       const newCat: WorkspaceCategory = {
         id: `cat-${Math.random().toString(36).substr(2, 5)}`,
-        name: catNameInput.trim(),
+        name: cleanName,
         color: catColorInput,
         order: categories.length
       };

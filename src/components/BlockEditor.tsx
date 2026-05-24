@@ -37,6 +37,7 @@ interface BlockEditorProps {
   onTriggerAi: (prompt: string, blockIndex: number) => void;
   isAiLoading: boolean;
   onOpenNotebook?: () => void;
+  onValidateTitle?: (itemId: string, title: string) => string;
 }
 
 export default function BlockEditor({
@@ -44,7 +45,8 @@ export default function BlockEditor({
   onChangeItem,
   onTriggerAi,
   isAiLoading,
-  onOpenNotebook
+  onOpenNotebook,
+  onValidateTitle
 }: BlockEditorProps) {
   const [blocks, setBlocks] = useState<EditorBlock[]>(item.blocks || []);
   const [activeBlockIndex, setActiveBlockIndex] = useState<number | null>(null);
@@ -215,6 +217,21 @@ export default function BlockEditor({
           type="text"
           value={item.title}
           onChange={handleTitleChange}
+          onBlur={(e) => {
+            const val = e.target.value.trim();
+            if (!val) return;
+            if (onValidateTitle) {
+              const checkedTitle = onValidateTitle(item.id, val);
+              if (checkedTitle.toLowerCase() !== val.toLowerCase()) {
+                alert(`O nome de workspace "${val}" já está em uso nesta plataforma. Ajustado para "${checkedTitle}".`);
+                onChangeItem({
+                  ...item,
+                  title: checkedTitle,
+                  updatedAt: new Date().toISOString()
+                });
+              }
+            }
+          }}
           placeholder="Documento Sem Título"
           className="w-full text-4xl lg:text-5xl font-extrabold font-display text-gray-900 border-none outline-none pb-4 mb-8 border-b border-gray-100 focus:border-brand-200 transition-all placeholder-gray-200"
         />

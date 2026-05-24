@@ -23,13 +23,15 @@ interface KeepWorkspaceProps {
   onChangeItem: (updatedItem: WorkspaceItem) => void;
   onTriggerAi: (prompt: string, noteId: string) => void;
   isAiLoading: boolean;
+  onValidateTitle?: (itemId: string, title: string) => string;
 }
 
 export default function KeepWorkspace({
   item,
   onChangeItem,
   onTriggerAi,
-  isAiLoading
+  isAiLoading,
+  onValidateTitle
 }: KeepWorkspaceProps) {
   const [notes, setNotes] = useState<KeepNote[]>(item.notes || []);
   const [editingNote, setEditingNote] = useState<KeepNote | null>(null);
@@ -251,6 +253,21 @@ export default function KeepWorkspace({
               value={item.title}
               title="Título principal do deck"
               onChange={(e) => onChangeItem({ ...item, title: e.target.value })}
+              onBlur={(e) => {
+                const val = e.target.value.trim();
+                if (!val) return;
+                if (onValidateTitle) {
+                  const checkedTitle = onValidateTitle(item.id, val);
+                  if (checkedTitle.toLowerCase() !== val.toLowerCase()) {
+                    alert(`O nome de workspace "${val}" já está em uso nesta plataforma. Ajustado para "${checkedTitle}".`);
+                    onChangeItem({
+                      ...item,
+                      title: checkedTitle,
+                      updatedAt: new Date().toISOString()
+                    });
+                  }
+                }
+              }}
               className="text-sm font-bold text-gray-450 border-none outline-none focus:bg-gray-100 focus:px-1 rounded"
               placeholder="Deck de Notas..."
             />

@@ -235,6 +235,21 @@ export default function App() {
     localStorage.setItem("notenext_items", JSON.stringify(updated));
   };
 
+  const getUniqueWorkspaceTitle = (proposedTitle: string, excludeItemId?: string) => {
+    let title = proposedTitle.trim();
+    let counter = 1;
+    const activeItems = items.filter(it => !it.isInTrash && it.id !== excludeItemId);
+    while (activeItems.some(it => it.title.trim().toLowerCase() === title.toLowerCase())) {
+      title = `${proposedTitle.trim()} (${counter})`;
+      counter++;
+    }
+    return title;
+  };
+
+  const handleValidateItemTitle = (itemId: string, titleName: string): string => {
+    return getUniqueWorkspaceTitle(titleName, itemId);
+  };
+
   const handleLoginSuccess = (newSession: UserSession) => {
     setSession(newSession);
     localStorage.setItem("notenext_session", JSON.stringify(newSession));
@@ -258,14 +273,14 @@ export default function App() {
     let defaultNotes: KeepNote[] = [];
 
     if (type === WorkspaceType.NOTION_DOC) {
-      defaultTitle = "Novo Documento Notion";
+      defaultTitle = getUniqueWorkspaceTitle("Novo Documento Notion");
       defaultBlocks = [{ id: "b-init", type: "paragraph", content: "" }];
     } else if (type === WorkspaceType.MILANOTE_CANVAS) {
-      defaultTitle = "Novo Mural Milanote";
+      defaultTitle = getUniqueWorkspaceTitle("Novo Mural Milanote");
       defaultElements = [];
       defaultConnections = [];
     } else if (type === WorkspaceType.KEEP_NOTES) {
-      defaultTitle = "Novo Quadro Keep";
+      defaultTitle = getUniqueWorkspaceTitle("Novo Quadro Keep");
       defaultNotes = [];
     }
 
@@ -438,7 +453,7 @@ export default function App() {
       // Contendo dois blocos de parágrafo separados para dar uma quebra de linha elegante na mensagem
       const newItem: WorkspaceItem = {
         id: `it-sub-${Math.random().toString(36).substring(2, 9)}`,
-        title: subName,
+        title: getUniqueWorkspaceTitle(subName),
         type: WorkspaceType.NOTION_DOC,
         category: targetCategory,
         isFavorite: false,
@@ -967,6 +982,7 @@ export default function App() {
                   onTriggerAi={handleTriggerAiFromContext}
                   isAiLoading={isAiLoading}
                   onOpenNotebook={() => setIsNotebookOpen(true)}
+                  onValidateTitle={handleValidateItemTitle}
                 />
               )}
               {currentItem.type === WorkspaceType.MILANOTE_CANVAS && (
@@ -983,6 +999,7 @@ export default function App() {
                   onChangeItem={handleChangeItem}
                   onTriggerAi={handleTriggerAiFromContext}
                   isAiLoading={isAiLoading}
+                  onValidateTitle={handleValidateItemTitle}
                 />
               )}
             </motion.div>
