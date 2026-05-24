@@ -11,7 +11,9 @@ import {
   Menu, 
   PanelRight, 
   BookmarkCheck,
-  Star
+  Star,
+  Trash2,
+  BookOpen
 } from "lucide-react";
 import { 
   WorkspaceItem, 
@@ -166,6 +168,10 @@ export default function App() {
   const [isConfigOpen, setIsConfigOpen] = useState(false);
   const [isNotebookOpen, setIsNotebookOpen] = useState(false);
   
+  // Custom states for hubs and notebook leaf focused navigation
+  const [viewType, setViewType] = useState<"workspace" | "category-hub" | "notebook-pages-hub">("workspace");
+  const [notebookInitialPageId, setNotebookInitialPageId] = useState<string | null>(null);
+  
   // Load session & data from localstorage
   useEffect(() => {
     const savedSession = localStorage.getItem("notenext_session") || localStorage.getItem("veridian_session");
@@ -265,6 +271,16 @@ export default function App() {
 
   const handleSelectItem = (id: string) => {
     setActiveItemId(id);
+    setViewType("workspace");
+  };
+
+  const handleSelectCategory = (catName: string) => {
+    setActiveCategory(catName);
+    if (catName === "Todos") {
+      setViewType("workspace");
+    } else {
+      setViewType("category-hub");
+    }
   };
 
   const handleChangeItem = (updatedItem: WorkspaceItem) => {
@@ -321,8 +337,10 @@ export default function App() {
     if (existing) {
       setActiveItemId(existing.id);
       setActiveCategory(targetCategory);
+      setViewType("workspace");
     } else {
       // Cria uma nova área de trabalho (Notion style document) com o nome da subcategoria
+      // Contendo dois blocos de parágrafo separados para dar uma quebra de linha elegante na mensagem
       const newItem: WorkspaceItem = {
         id: `it-sub-${Math.random().toString(36).substring(2, 9)}`,
         title: subName,
@@ -334,7 +352,12 @@ export default function App() {
           {
             id: `b-sub-1`,
             type: "paragraph",
-            content: `Seja bem-vindo(a) à área de trabalho criativa **${subName}** sob a categoria **${targetCategory}**.\n\nExperimente adicionar novos blocos de notas, tarefas, ou cabeçalhos pressionando '/' no editor.`
+            content: `Seja bem-vindo(a) à área de trabalho criativa **${subName}** sob a categoria **${targetCategory}**.`
+          },
+          {
+            id: `b-sub-2`,
+            type: "paragraph",
+            content: `Experimente adicionar novos blocos de notas, tarefas, ou cabeçalhos pressionando '/' no editor.`
           }
         ],
         elements: [],
@@ -346,6 +369,7 @@ export default function App() {
       saveItems(updated);
       setActiveItemId(newItem.id);
       setActiveCategory(targetCategory);
+      setViewType("workspace");
     }
   };
 
@@ -474,14 +498,14 @@ export default function App() {
       {!isSidebarCollapsed ? (
         <Sidebar
           user={session}
-          items={filteredItems}
+          items={items}
           activeItemId={activeItemId}
           onSelectItem={handleSelectItem}
           onAddItem={handleAddItem}
           onLogout={handleLogout}
           onSearchChange={setSearchQuery}
           activeCategory={activeCategory}
-          onSelectCategory={setActiveCategory}
+          onSelectCategory={handleSelectCategory}
           categoriesList={categories}
           onOpenSettings={() => setIsConfigOpen(true)}
           isWide={isSidebarWide}
@@ -490,6 +514,7 @@ export default function App() {
           onDeleteItem={deleteCurrentWorkspace}
           onUpdateCategories={setCategories}
           onSelectSubcategory={handleSelectSubcategory}
+          onSelectNotebookPagesHub={() => setViewType("notebook-pages-hub")}
         />
       ) : (
         /* Floating Restore Menu Button on left edge when collapsed */
@@ -507,7 +532,7 @@ export default function App() {
       <main className="flex-1 overflow-hidden flex flex-col relative bg-white">
         
         {/* Dynamic Inner Upper Controls segment */}
-        {currentItem ? (
+        {currentItem && viewType === "workspace" ? (
           <div className="absolute top-4 right-14 z-20 flex items-center gap-2">
             
             {/* Toggle Favourite stars */}
@@ -541,8 +566,271 @@ export default function App() {
 
         {/* View switching logic */}
         <AnimatePresence mode="wait">
-          {!currentItem ? (
+          {viewType === "category-hub" ? (
+            <motion.div
+              key="category-hub"
+              initial={{ opacity: 0, y: 15 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -15 }}
+              transition={{ duration: 0.2 }}
+              className="flex-1 overflow-y-auto bg-[#fafcfb] p-8 lg:p-14 font-sans"
+            >
+              <div className="max-w-4xl mx-auto space-y-8">
+                {/* Header Banner */}
+                <div className="p-6 bg-white border border-gray-150 rounded-2xl shadow-3xs flex flex-col sm:flex-row items-center justify-between gap-6">
+                  <div className="space-y-1">
+                    <div className="flex items-center gap-2">
+                      <span 
+                        className="w-3.5 h-3.5 rounded-full"
+                        style={{ backgroundColor: categories.find(c => c.name.toLowerCase() === activeCategory.toLowerCase())?.color || "#10b981" }}
+                      />
+                      <h2 className="text-2xl font-extrabold font-display text-gray-900">
+                        {activeCategory}
+                      </h2>
+                    </div>
+                    <p className="text-xs text-gray-400">
+                      Painel central de subcategorias para a categoria <span className="font-semibold text-gray-650">{activeCategory}</span>.
+                    </p>
+                  </div>
+
+                  {/* Quick creation of subcategories in Hub Page */}
+                  <form
+                    onSubmit={(e) => {
+                      e.preventDefault();
+                      const formData = new FormData(e.currentTarget);
+                      const name = formData.get("subName") as string;
+                      if (!name || !name.trim()) return;
+
+                      const currentCat = categories.find(c => c.name.toLowerCase() === activeCategory.toLowerCase());
+                      if (currentCat) {
+                        const freshSub = {
+                          id: `sub-${Math.random().toString(36).substring(2, 6)}`,
+                          name: name.trim()
+                        };
+                        const updated = categories.map(c => {
+                          if (c.id === currentCat.id) {
+                            return {
+                              ...c,
+                              subcategories: [...(c.subcategories || []), freshSub]
+                            };
+                          }
+                          return c;
+                        });
+                        setCategories(updated);
+                        localStorage.setItem("notenext_categories", JSON.stringify(updated));
+                      }
+                      e.currentTarget.reset();
+                    }}
+                    className="flex items-center gap-2 bg-gray-50 p-1.5 rounded-xl border border-gray-150 w-full sm:w-auto"
+                  >
+                    <input
+                      type="text"
+                      name="subName"
+                      placeholder="Nova subcategoria..."
+                      className="bg-transparent text-xs placeholder-gray-400 outline-none px-3 py-1.5 w-full sm:w-44 font-sans border-none"
+                      required
+                    />
+                    <button
+                      type="submit"
+                      className="bg-brand-600 hover:bg-brand-700 text-white font-bold text-xs rounded-lg px-3 py-1.5 transition-colors cursor-pointer whitespace-nowrap"
+                    >
+                      Criar Subcategoria
+                    </button>
+                  </form>
+                </div>
+
+                {/* Subcategories Bento-Grid Cards */}
+                <div className="space-y-4">
+                  <h3 className="text-xs font-bold text-gray-405 uppercase tracking-widest">
+                    Subcategorias / Áreas de Trabalho em Cartão
+                  </h3>
+
+                  {(() => {
+                    const currentCatObj = categories.find(c => c.name.toLowerCase() === activeCategory.toLowerCase());
+                    const subcats = currentCatObj?.subcategories || [];
+
+                    if (subcats.length === 0) {
+                      return (
+                        <div className="text-center p-12 bg-white border border-gray-150 rounded-2xl">
+                          <Layers className="w-12 h-12 text-brand-100 mx-auto mb-3" />
+                          <span className="text-xs font-bold text-gray-700 block">Nenhuma subcategoria criada sob {activeCategory}</span>
+                          <span className="text-[11px] text-gray-450 block mt-1">Crie sua primeira subcategoria usando o campo acima.</span>
+                        </div>
+                      );
+                    }
+
+                    return (
+                      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5">
+                        {subcats.map((sub) => {
+                          // Find any existing workspaces connected to this subcategory
+                          const countWorkspaces = items.filter(
+                            it => it.title.trim().toLowerCase() === sub.name.trim().toLowerCase() && it.category === "Produto"
+                          ).length;
+
+                          return (
+                            <div
+                              key={sub.id}
+                              className="group bg-white border border-gray-150 hover:border-brand-500 rounded-2xl p-5 hover:shadow-xs transition-all duration-200 flex flex-col justify-between min-h-[160px]"
+                            >
+                              <div className="space-y-1">
+                                <div className="flex items-center justify-between mb-2">
+                                  <div className="w-8 h-8 rounded-lg bg-emerald-50 flex items-center justify-center border border-emerald-100/50">
+                                    <BookmarkCheck className="w-4 h-4 text-brand-650" />
+                                  </div>
+                                  <button
+                                    type="button"
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      if (confirm(`Tem certeza de que deseja excluir a subcategoria "${sub.name}"?`)) {
+                                        const updated = categories.map(c => {
+                                          if (c.id === currentCatObj.id) {
+                                            return {
+                                              ...c,
+                                              subcategories: (c.subcategories || []).filter(s => s.id !== sub.id)
+                                            };
+                                          }
+                                          return c;
+                                        });
+                                        setCategories(updated);
+                                        localStorage.setItem("notenext_categories", JSON.stringify(updated));
+                                      }
+                                    }}
+                                    className="text-gray-300 hover:text-red-650 p-1 hover:bg-red-50 rounded-md transition-all cursor-pointer"
+                                    title="Excluir subcategoria"
+                                  >
+                                    <Trash2 className="w-3.5 h-3.5" />
+                                  </button>
+                                </div>
+
+                                <h4 className="font-extrabold font-display text-base text-gray-850 truncate group-hover:text-brand-900 leading-snug">
+                                  {sub.name}
+                                </h4>
+                                <span className="text-[10px] text-gray-400 block pb-3">
+                                  {countWorkspaces > 0 ? `✓ Vinculada a ${countWorkspaces} área sob Produto` : "Ainda sem documento ativo"}
+                                </span>
+                              </div>
+
+                              <button
+                                onClick={() => handleSelectSubcategory(sub.name, activeCategory)}
+                                className="w-full text-center py-2 bg-[#f4faf7] hover:bg-brand-600 hover:text-white border border-[#eaf4ef] text-brand-850 font-bold text-xs rounded-lg transition-all cursor-pointer"
+                              >
+                                Abrir Área Criativa
+                              </button>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    );
+                  })()}
+                </div>
+              </div>
+            </motion.div>
+          ) : viewType === "notebook-pages-hub" ? (
+            <motion.div
+              key="notebook-hub"
+              initial={{ opacity: 0, y: 15 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -15 }}
+              transition={{ duration: 0.2 }}
+              className="flex-1 overflow-y-auto bg-[#fafcfb] p-8 lg:p-14 font-sans"
+            >
+              <div className="max-w-4xl mx-auto space-y-8">
+                {/* General Leaves Header */}
+                <div className="p-6 bg-white border border-emerald-100 rounded-2xl shadow-3xs flex flex-col sm:flex-row items-center justify-between gap-6 bg-gradient-to-r from-emerald-50/10 to-white">
+                  <div className="space-y-1">
+                    <div className="flex items-center gap-2">
+                      <BookOpen className="w-5 h-5 text-emerald-650 animate-bounce" />
+                      <h2 className="text-xl font-extrabold font-display text-gray-900">
+                        Fólio Geral de Folhas
+                      </h2>
+                    </div>
+                    <p className="text-xs text-gray-400">
+                      Consolidação de todas as páginas criadas no <span className="font-semibold text-emerald-750">Caderno Inteligente</span> através dos seus workspaces NoteNext. Use para revisões instantâneas e alterações ágeis.
+                    </p>
+                  </div>
+
+                  <div className="px-3.5 py-1.5 bg-emerald-100 text-emerald-850 border border-emerald-200 font-extrabold rounded-full text-xs">
+                    {(() => {
+                      const allCount = items.reduce((acc, it) => acc + (it.notebookPages || []).length, 0);
+                      return `${allCount} ${allCount === 1 ? "folha" : "folhas"}`;
+                    })()}
+                  </div>
+                </div>
+
+                {/* Cards Grid */}
+                <div className="space-y-4">
+                  <h3 className="text-xs font-bold text-gray-400 uppercase tracking-widest">
+                    Folhas Ativas no Sistema
+                  </h3>
+
+                  {(() => {
+                    const allPages = items.reduce<any[]>((acc, item) => {
+                      const pagesList = item.notebookPages || [];
+                      return [
+                        ...acc,
+                        ...pagesList.map(p => ({
+                          ...p,
+                          parentWorkspaceId: item.id,
+                          parentWorkspaceTitle: item.title
+                        }))
+                      ];
+                    }, []);
+
+                    if (allPages.length === 0) {
+                      return (
+                        <div className="text-center p-12 bg-white border border-gray-150 rounded-2xl">
+                          <BookOpen className="w-12 h-12 text-gray-200 mx-auto mb-3" />
+                          <span className="text-xs font-bold text-gray-700 block text-gray-400">Você ainda não tem fólio de folhas criado.</span>
+                        </div>
+                      );
+                    }
+
+                    return (
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+                        {allPages.map((page) => (
+                          <div
+                            key={page.id}
+                            onClick={() => {
+                              setActiveItemId(page.parentWorkspaceId);
+                              setNotebookInitialPageId(page.id);
+                              setViewType("workspace");
+                              setIsNotebookOpen(true);
+                            }}
+                            className="bg-white border border-gray-150 hover:border-emerald-300 rounded-2xl p-5 hover:shadow-xs transition-all cursor-pointer group flex flex-col justify-between min-h-[150px]"
+                          >
+                            <div className="space-y-2.5">
+                              <div className="flex items-center justify-between">
+                                <span className="text-[10px] font-extrabold uppercase px-2 py-0.5 rounded-md bg-[#eaf5ef] text-emerald-800 border border-emerald-100/50">
+                                  Ativo em: {page.parentWorkspaceTitle}
+                                </span>
+                                <span className="text-[9px] text-gray-400 font-mono">ID: {page.id}</span>
+                              </div>
+
+                              <h4 className="font-extrabold font-display text-gray-800 text-base leading-tight group-hover:text-emerald-750">
+                                {page.title || "Sem título"}
+                              </h4>
+
+                              <p className="text-xs text-gray-450 line-clamp-2 leading-relaxed">
+                                {page.content || "Sem notas adicionais na página. Clique para abrir o editor e começar a redigir."}
+                              </p>
+                            </div>
+
+                            <div className="mt-4 pt-3 border-t border-gray-100 flex items-center justify-between">
+                              <span className="text-[10px] text-brand-700 font-bold group-hover:translate-x-1 duration-150 transition-transform">
+                                Alterar Página →
+                              </span>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    );
+                  })()}
+                </div>
+              </div>
+            </motion.div>
+          ) : !currentItem ? (
             <motion.div 
+              key="empty"
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
@@ -557,10 +845,10 @@ export default function App() {
           ) : (
             <motion.div
               key={currentItem.id}
-              initial={{ opacity: 0, scale: 0.99 }}
+              initial={{ opacity: 0, scale: 0.995 }}
               animate={{ opacity: 1, scale: 1 }}
-              exit={{ opacity: 0, scale: 0.99 }}
-              transition={{ duration: 0.25 }}
+              exit={{ opacity: 0, scale: 0.995 }}
+              transition={{ duration: 0.2 }}
               className="flex-1 flex h-full overflow-hidden"
             >
               {currentItem.type === WorkspaceType.NOTION_DOC && (

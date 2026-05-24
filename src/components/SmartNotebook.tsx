@@ -33,6 +33,7 @@ interface SmartNotebookProps {
   onChangeItem: (updatedItem: WorkspaceItem) => void;
   onChangeAllItems: (updatedItems: WorkspaceItem[]) => void;
   onTriggerAi?: (prompt: string, context: string) => void;
+  initialSelectedPageId?: string | null;
 }
 
 export default function SmartNotebook({
@@ -42,7 +43,8 @@ export default function SmartNotebook({
   workspaces,
   onChangeItem,
   onChangeAllItems,
-  onTriggerAi
+  onTriggerAi,
+  initialSelectedPageId
 }: SmartNotebookProps) {
   // Extract or initialize notebook pages
   const [pages, setPages] = useState<NotebookPage[]>(currentItem.notebookPages || []);
@@ -57,10 +59,14 @@ export default function SmartNotebook({
 
   useEffect(() => {
     setPages(currentItem.notebookPages || []);
-    if ((currentItem.notebookPages || []).length > 0 && !activePageId) {
-      setActivePageId(currentItem.notebookPages![0].id);
+    if (initialSelectedPageId) {
+      setActivePageId(initialSelectedPageId);
+    } else if ((currentItem.notebookPages || []).length > 0) {
+      if (!activePageId || !currentItem.notebookPages.some(p => p.id === activePageId)) {
+        setActivePageId(currentItem.notebookPages[0].id);
+      }
     }
-  }, [currentItem.id, currentItem.notebookPages]);
+  }, [currentItem.id, currentItem.notebookPages, initialSelectedPageId]);
 
   // Synchronize and Auto-save helper
   const syncWithParent = (updatedPages: NotebookPage[]) => {

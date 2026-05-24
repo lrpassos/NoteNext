@@ -47,6 +47,7 @@ interface SidebarProps {
   onDeleteItem: (id: string) => void;
   onUpdateCategories: (cats: WorkspaceCategory[]) => void;
   onSelectSubcategory?: (subName: string, parentCatName: string) => void;
+  onSelectNotebookPagesHub?: () => void;
 }
 
 export default function Sidebar({
@@ -66,7 +67,8 @@ export default function Sidebar({
   onCollapse,
   onDeleteItem,
   onUpdateCategories,
-  onSelectSubcategory
+  onSelectSubcategory,
+  onSelectNotebookPagesHub
 }: SidebarProps) {
   const [showAddMenu, setShowAddMenu] = useState(false);
   const [searchVal, setSearchVal] = useState("");
@@ -307,6 +309,41 @@ export default function Sidebar({
         )}
       </div>
 
+      {/* Smart Notebook general leaves tracker button */}
+      {(() => {
+        const allNotebookPages = items.reduce<any[]>((acc, item) => {
+          const pages = item.notebookPages || [];
+          return [
+            ...acc,
+            ...pages.map(page => ({
+              ...page,
+              parentWorkspaceId: item.id,
+              parentWorkspaceTitle: item.title
+            }))
+          ];
+        }, []);
+
+        if (allNotebookPages.length === 0) return null;
+
+        return (
+          <div className="px-3 pb-2 pt-1">
+            <button
+              onClick={() => onSelectNotebookPagesHub?.()}
+              className="w-full py-2 bg-emerald-50 hover:bg-emerald-100 border border-emerald-200 hover:border-emerald-300 text-emerald-850 font-bold text-xs rounded-lg transition-all shadow-3xs flex items-center justify-between px-3 cursor-pointer"
+              title="Ver todas as folhas do Caderno Inteligente"
+            >
+              <span className="flex items-center gap-1.5">
+                <BookOpen className="w-3.5 h-3.5 text-emerald-650 animate-pulse" />
+                <span>Caderno Inteligente</span>
+              </span>
+              <span className="bg-emerald-650 text-white text-[10px] px-2 py-0.5 rounded-full font-bold leading-none">
+                {allNotebookPages.length} {allNotebookPages.length === 1 ? "folha" : "folhas"}
+              </span>
+            </button>
+          </div>
+        );
+      })()}
+
       {/* Main Navigator Container */}
       <div className="flex-1 overflow-y-auto px-2 space-y-4 py-2">
         {/* Categories / Tags filter */}
@@ -336,7 +373,6 @@ export default function Sidebar({
             {/* Dynamic Configured Colored Categories */}
             {categoriesList.map((cat) => {
               const isExpanded = expandedCatId === cat.id;
-              const subcats = cat.subcategories || [];
               const catWorkspaces = items.filter(
                 (i) => i.category.toLowerCase() === cat.name.toLowerCase()
               );
@@ -373,98 +409,44 @@ export default function Sidebar({
                     </div>
                   </button>
 
-                  {/* Nested expanded container space for creating/managing subcategories */}
+                  {/* Nested expanded container space for listing workspaces under their category */}
                   {isExpanded && (
-                    <div className="pl-4 pr-2 py-2 mt-0.5 mb-1.5 border-t border-dashed border-gray-100/60 space-y-2.5 bg-[#f5f8f6]/50">
-                      <div className="text-[9px] text-gray-400 font-bold uppercase tracking-wider flex items-center justify-between select-none">
-                        <span>Subcategorias</span>
-                        <span className="text-[8px] text-brand-650 normal-case bg-green-50 px-1 py-0.5 rounded">Criativa</span>
-                      </div>
-
-                      {/* List of custom subcategories */}
-                      {subcats.length === 0 ? (
+                    <div className="pl-3 pr-2 py-1.5 border-t border-dashed border-gray-100/60 space-y-1 bg-[#f5f8f6]/50">
+                      {catWorkspaces.length === 0 ? (
                         <div className="text-[10px] text-gray-400 italic py-1 pl-1">
-                          Nenhuma subcategoria ainda. Crie uma abaixo!
+                          Nenhum documento nesta categoria.
                         </div>
                       ) : (
-                        <div className="space-y-1">
-                          {subcats.map((sub) => (
-                            <div key={sub.id} className="flex items-center justify-between text-xs py-0.5 group/sub bg-white border border-gray-100/40 rounded px-2 hover:bg-[#eaf3ee]/30">
-                              <button
-                                type="button"
-                                onClick={() => onSelectSubcategory?.(sub.name, cat.name)}
-                                className="text-gray-650 font-medium truncate flex-1 flex items-center gap-1.5 hover:text-brand-700 text-left cursor-pointer py-0.5"
-                                title={`Abrir área criativa "${sub.name}"`}
-                              >
-                                <span className="w-1.5 h-1.5 rounded-full bg-brand-500 flex-shrink-0" />
-                                <span className="truncate">{sub.name}</span>
-                              </button>
-                              <button
-                                type="button"
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  const updated = categoriesList.map(c => {
-                                    if (c.id === cat.id) {
-                                      return {
-                                        ...c,
-                                        subcategories: subcats.filter(s => s.id !== sub.id)
-                                      };
-                                    }
-                                    return c;
-                                  });
-                                  onUpdateCategories(updated);
-                                }}
-                                className="opacity-0 group-hover/sub:opacity-100 p-0.5 text-gray-400 hover:text-red-500 rounded hover:bg-red-50 transition-all cursor-pointer"
-                                title="Excluir subcategoria"
-                              >
-                                <Trash2 className="w-3 h-3" />
-                              </button>
-                            </div>
-                          ))}
-                        </div>
+                        catWorkspaces.map((item) => (
+                          <button
+                            key={item.id}
+                            onClick={() => onSelectItem(item.id)}
+                            className={`w-full px-2 py-1 flex items-center justify-between text-xs rounded transition-all select-none ${
+                              activeItemId === item.id
+                                ? "bg-white text-brand-900 border-l-2 border-brand-600 font-bold shadow-3xs"
+                                : "text-gray-650 hover:bg-white/60"
+                            }`}
+                          >
+                            <span className="flex items-center gap-1.5 truncate py-0.5">
+                              {getIconForType(item.type)}
+                              <span className="truncate text-[11px] font-medium leading-none">{item.title}</span>
+                            </span>
+                            <button
+                              type="button"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                if (confirm(`Deseja excluir o documento "${item.title}"?`)) {
+                                  onDeleteItem(item.id);
+                                }
+                              }}
+                              className="px-1 text-gray-400 hover:text-red-500 rounded bg-transparent hover:bg-red-50 transition-all cursor-pointer"
+                              title="Excluir documento"
+                            >
+                              <Trash2 className="w-2.5 h-2.5" />
+                            </button>
+                          </button>
+                        ))
                       )}
-
-                      {/* Small form to create a subcategory inline inside category view */}
-                      <form 
-                        onSubmit={(e) => {
-                          e.preventDefault();
-                          if (!newSubcatName.trim()) return;
-
-                          const freshSub = {
-                            id: `sub-${Math.random().toString(36).substring(2, 6)}`,
-                            name: newSubcatName.trim()
-                          };
-
-                          const updated = categoriesList.map(c => {
-                            if (c.id === cat.id) {
-                              const existing = c.subcategories || [];
-                              return {
-                                ...c,
-                                subcategories: [...existing, freshSub]
-                              };
-                            }
-                            return c;
-                          });
-
-                          onUpdateCategories(updated);
-                          setNewSubcatName("");
-                        }}
-                        className="flex items-center gap-1.5 bg-white p-1 rounded-lg border border-gray-150"
-                      >
-                        <input
-                          type="text"
-                          value={newSubcatName}
-                          onChange={(e) => setNewSubcatName(e.target.value)}
-                          placeholder="Nova subcategoria..."
-                          className="flex-1 text-[10px] text-gray-800 bg-transparent outline-none px-1 border-none font-sans"
-                        />
-                        <button
-                          type="submit"
-                          className="bg-brand-600 hover:bg-brand-700 text-white rounded px-2 py-0.5 text-[9px] font-bold cursor-pointer transition-colors"
-                        >
-                          Adicionar
-                        </button>
-                      </form>
                     </div>
                   )}
                 </div>
@@ -513,58 +495,6 @@ export default function Sidebar({
           </div>
         )}
 
-        {/* Workspaces list */}
-        <div>
-          <span className="px-3 text-[10px] font-bold text-gray-400 uppercase tracking-wider block mb-1.5">
-            Seus Documentos
-          </span>
-          <div className="space-y-0.5">
-            {items.length === 0 ? (
-              <span className="px-3 text-[11px] text-gray-400 italic block">
-                Nenhuma área criada ainda.
-              </span>
-            ) : (
-              items.map((item) => (
-                <button
-                  key={item.id}
-                  onClick={() => onSelectItem(item.id)}
-                  className={`w-full px-3 py-1.5 text-left text-xs rounded-md flex items-center justify-between group transition-all ${
-                    activeItemId === item.id
-                      ? "bg-brand-50/70 text-brand-900 border-l-2 border-brand-600 font-semibold"
-                      : "text-gray-650 hover:bg-gray-50/50"
-                  }`}
-                >
-                  <div className="flex items-center gap-2 truncate flex-1">
-                    {getIconForType(item.type)}
-                    <div className="truncate">
-                      <span className="block truncate leading-tight">{item.title}</span>
-                      <span className="text-[9px] text-gray-400 block font-normal mt-0.5">
-                        {getLabelForType(item.type)}
-                      </span>
-                    </div>
-                  </div>
-                  
-                  {/* Subtle actions grouping on hover inside Sidebar lists */}
-                  <div className="flex items-center gap-1">
-                    <button
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        if (confirm(`Tem certeza que gostaria de excluir a área "${item.title}"?`)) {
-                          onDeleteItem(item.id);
-                        }
-                      }}
-                      title="Excluir Área Criativa"
-                      className="opacity-0 group-hover:opacity-100 p-1 text-gray-400 hover:text-red-500 rounded hover:bg-red-50 transition-all cursor-pointer"
-                    >
-                      <Trash2 className="w-3.5 h-3.5" />
-                    </button>
-                    <ChevronRight className="w-3 h-3 text-gray-300 opacity-60 group-hover:opacity-100 group-hover:translate-x-0.5 transition-all flex-shrink-0" />
-                  </div>
-                </button>
-              ))
-            )}
-          </div>
-        </div>
       </div>
 
       {/* Sidebar Footer User Info block */}
