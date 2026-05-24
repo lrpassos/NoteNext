@@ -663,19 +663,6 @@ export default function App() {
               <Star className={`w-4 h-4 ${currentItem.isFavorite ? "fill-current" : ""}`} />
             </button>
 
-            {/* Delete workspace */}
-            <button
-              onClick={() => {
-                if (confirm(`Tem certeza de que gostaria de excluir a área "${currentItem.title}"?`)) {
-                  deleteCurrentWorkspace(currentItem.id);
-                }
-              }}
-              className="p-1 px-2 hover:bg-red-50 text-gray-350 hover:text-red-500 text-xs font-semibold rounded-lg border border-transparent hover:border-red-100 transition-all cursor-pointer"
-              title="Excluir espaço"
-            >
-              Excluir
-            </button>
-
           </div>
         ) : null}
 
@@ -1122,6 +1109,22 @@ export default function App() {
             </motion.div>
           )}
         </AnimatePresence>
+
+        {currentItem && viewType === "workspace" && (
+          <div className="absolute bottom-6 right-6 z-30">
+            <button
+              onClick={() => {
+                if (confirm(`Tem certeza de que gostaria de excluir a área "${currentItem.title}"?`)) {
+                  deleteCurrentWorkspace(currentItem.id);
+                }
+              }}
+              className="w-12 h-12 bg-[#4b5320] hover:bg-[#3c4219] text-white shadow-lg hover:shadow-xl rounded-full flex items-center justify-center transition-all cursor-pointer border border-[#3c4219]/25 hover:scale-105 active:scale-95 duration-150"
+              title="Excluir espaço"
+            >
+              <Trash2 className="w-5 h-5 text-[#f5f8f6]" />
+            </button>
+          </div>
+        )}
       </main>
 
       {/* Unified SaaS Configuration Panel Overlay */}

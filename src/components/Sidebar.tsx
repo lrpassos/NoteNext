@@ -21,9 +21,21 @@ import {
   Signature,
   Settings,
   RefreshCw,
-  Trash2
+  Trash2,
+  SlidersHorizontal,
+  ChevronUp,
+  ChevronDown,
+  Move,
+  Eye,
+  EyeOff
 } from "lucide-react";
 import { WorkspaceItem, WorkspaceType, UserSession, WorkspaceCategory } from "../types";
+
+interface SidebarSection {
+  id: string;
+  name: string;
+  visible: boolean;
+}
 
 /**
  * @description Application side navigation bar.
@@ -87,6 +99,60 @@ export default function Sidebar({
   const [expandedCatId, setExpandedCatId] = useState<string | null>(null);
   const [newSubcatName, setNewSubcatName] = useState("");
   
+  const [isLayoutMode, setIsLayoutMode] = useState(false);
+  const [sections, setSections] = useState<SidebarSection[]>(() => {
+    const saved = localStorage.getItem("notenext_sidebar_sections_layout");
+    if (saved) {
+      try {
+        const parsed = JSON.parse(saved);
+        if (Array.isArray(parsed) && parsed.length > 0) {
+          const ids = parsed.map((s: any) => s.id);
+          const defaults = [
+            { id: "ai-prompt", name: "Status IA NoteNext", visible: true },
+            { id: "search", name: "Barra de Pesquisa", visible: true },
+            { id: "new-creative", name: "Botão Novo Workspace", visible: true },
+            { id: "smart-notebook", name: "Caderno Inteligente", visible: true },
+            { id: "categories", name: "Categorias e Subs", visible: true },
+            { id: "all-workspaces", name: "Lista Workspaces", visible: true },
+            { id: "lixeira", name: "Lixeira e Descarte", visible: true },
+            { id: "favorites", name: "Workspaces Favoritos", visible: true },
+          ];
+          const missing = defaults.filter((d) => !ids.includes(d.id));
+          return [...parsed, ...missing];
+        }
+      } catch (e) {
+        console.error("Error loading layout", e);
+      }
+    }
+    return [
+      { id: "ai-prompt", name: "Status IA NoteNext", visible: true },
+      { id: "search", name: "Barra de Pesquisa", visible: true },
+      { id: "new-creative", name: "Botão Novo Workspace", visible: true },
+      { id: "smart-notebook", name: "Caderno Inteligente", visible: true },
+      { id: "categories", name: "Categorias e Subs", visible: true },
+      { id: "all-workspaces", name: "Lista Workspaces", visible: true },
+      { id: "lixeira", name: "Lixeira e Descarte", visible: true },
+      { id: "favorites", name: "Workspaces Favoritos", visible: true },
+    ];
+  });
+
+  const moveSection = (index: number, direction: "up" | "down") => {
+    const nextIndex = direction === "up" ? index - 1 : index + 1;
+    if (nextIndex < 0 || nextIndex >= sections.length) return;
+    const updated = [...sections];
+    const temp = updated[index];
+    updated[index] = updated[nextIndex];
+    updated[nextIndex] = temp;
+    setSections(updated);
+    localStorage.setItem("notenext_sidebar_sections_layout", JSON.stringify(updated));
+  };
+
+  const toggleSectionVisibility = (id: string) => {
+    const updated = sections.map((s) => (s.id === id ? { ...s, visible: !s.visible } : s));
+    setSections(updated);
+    localStorage.setItem("notenext_sidebar_sections_layout", JSON.stringify(updated));
+  };
+  
   // Custom sidebar width state and dragging state
   const [sidebarWidth, setSidebarWidth] = useState<number>(() => {
     const saved = localStorage.getItem("notenext_sidebar_width");
@@ -148,6 +214,473 @@ export default function Sidebar({
     }
   };
 
+  const renderSectionContent = (id: string) => {
+    switch (id) {
+      case "ai-prompt":
+        return (
+          <div className="px-3 pt-3">
+            <div className="bg-gradient-to-r from-emerald-500/5 to-teal-500/5 hover:from-emerald-500/10 hover:to-teal-500/10 border border-brand-500/10 rounded-xl p-2.5 transition-all text-xs flex items-center gap-2">
+              <div className="w-6 h-6 rounded-lg bg-white shadow-sm flex items-center justify-center border border-brand-500/15">
+                <Sparkles className="w-3.5 h-3.5 text-brand-600" />
+              </div>
+              <div>
+                <span className="font-semibold text-brand-900 block leading-tight">NoteNext IA Ativa</span>
+                <span className="text-[10px] text-brand-700/70 block">Gere ideias e resumos em segundos</span>
+              </div>
+            </div>
+          </div>
+        );
+
+      case "search":
+        return (
+          <div className="p-3">
+            <div className="relative">
+              <input
+                type="text"
+                value={searchVal}
+                onChange={handleSearch}
+                placeholder="Pesquisar documento..."
+                className="w-full bg-gray-50 hover:bg-gray-100 focus:bg-white pl-8 pr-3 py-1.5 text-xs rounded-lg border border-gray-150 focus:outline-none focus:border-brand-500 transition-all font-sans"
+              />
+              <Search className="w-3.5 h-3.5 text-gray-400 absolute left-2.5 top-2.5 pointer-events-none" />
+            </div>
+          </div>
+        );
+
+      case "new-creative":
+        return (
+          <div className="px-3 pb-2 relative">
+            <button
+              onClick={() => setShowAddMenu(!showAddMenu)}
+              className="w-full py-2 bg-brand-600 hover:bg-brand-700 text-white font-semibold text-xs rounded-lg transition-all shadow-sm shadow-brand-600/10 hover:shadow-brand-600/20 flex items-center justify-center gap-1.5"
+            >
+              <Plus className="w-3.5 h-3.5" />
+              <span>Nova Área Criativa</span>
+            </button>
+
+            {showAddMenu && (
+              <>
+                <div 
+                  className="fixed inset-0 z-30" 
+                  onClick={() => setShowAddMenu(false)}
+                />
+                <div className="absolute top-full left-3 right-3 mt-1 bg-white rounded-lg border border-gray-105 shadow-xl py-1 z-40 text-xs">
+                  <button
+                    onClick={() => { onAddItem(WorkspaceType.NOTION_DOC); setShowAddMenu(false); }}
+                    className="w-full px-3 py-2 text-left hover:bg-gray-50 text-gray-705 flex items-center gap-2.5"
+                  >
+                    <div className="w-6 h-6 rounded bg-blue-50 flex items-center justify-center text-blue-600">
+                      <BookOpen className="w-3.5 h-3.5" />
+                    </div>
+                    <div>
+                      <span className="font-semibold block">Espaço Notion</span>
+                      <span className="text-[10px] text-gray-400">Editor modular por blocos</span>
+                    </div>
+                  </button>
+
+                  <button
+                    onClick={() => { onAddItem(WorkspaceType.MILANOTE_CANVAS); setShowAddMenu(false); }}
+                    className="w-full px-3 py-2 text-left hover:bg-gray-50 text-gray-705 border-t border-gray-50 flex items-center gap-2.5"
+                  >
+                    <div className="w-6 h-6 rounded bg-indigo-50 flex items-center justify-center text-indigo-600">
+                      <Layers className="w-3.5 h-3.5" />
+                    </div>
+                    <div>
+                      <span className="font-semibold block">Mural Milanote</span>
+                      <span className="text-[10px] text-gray-400">Canvas infinito visual livre</span>
+                    </div>
+                  </button>
+
+                  <button
+                    onClick={() => { onAddItem(WorkspaceType.KEEP_NOTES); setShowAddMenu(false); }}
+                    className="w-full px-3 py-2 text-left hover:bg-gray-50 text-gray-705 border-t border-gray-50 flex items-center gap-2.5"
+                  >
+                    <div className="w-6 h-6 rounded bg-amber-50 flex items-center justify-center text-amber-600">
+                      <StickyNote className="w-3.5 h-3.5" />
+                    </div>
+                    <div>
+                      <span className="font-semibold block">Notas Keep</span>
+                      <span className="text-[10px] text-gray-400">Cards e checklists ágeis</span>
+                    </div>
+                  </button>
+                </div>
+              </>
+            )}
+          </div>
+        );
+
+      case "smart-notebook":
+        const allNotebookPages = items.reduce<any[]>((acc, item) => {
+          const pages = item.notebookPages || [];
+          return [
+            ...acc,
+            ...pages.map(page => ({
+              ...page,
+              parentWorkspaceId: item.id,
+              parentWorkspaceTitle: item.title
+            }))
+          ];
+        }, []);
+
+        return (
+          <div className="px-3 pb-2 pt-1">
+            <button
+              onClick={() => {
+                if (onOpenNotebook) {
+                  onOpenNotebook();
+                } else if (onSelectNotebookPagesHub) {
+                  onSelectNotebookPagesHub();
+                }
+              }}
+              className="w-full py-2 bg-emerald-50 hover:bg-emerald-100 border border-emerald-205 hover:border-emerald-300 text-emerald-850 font-bold text-xs rounded-lg transition-all shadow-3xs flex items-center justify-between px-3 cursor-pointer"
+              title="Abrir o Caderno Inteligente e Ver Notas"
+            >
+              <span className="flex items-center gap-1.5">
+                <BookOpen className="w-3.5 h-3.5 text-emerald-650 animate-pulse" />
+                <span>Caderno Inteligente</span>
+              </span>
+              <span className="bg-[#054d3d] text-emerald-50 text-[10px] px-2 py-0.5 rounded-full font-bold leading-none">
+                {allNotebookPages.length} {allNotebookPages.length === 1 ? "folha" : "folhas"}
+              </span>
+            </button>
+          </div>
+        );
+
+      case "categories":
+        return (
+          <div className="px-2">
+            <span className="px-3 text-[10px] font-bold text-gray-400 uppercase tracking-wider block mb-1.5 text-left">
+              Categorias
+            </span>
+            <div className="space-y-0.5">
+              {/* Standard "Todos" Category Filter */}
+              <button
+                onClick={() => onSelectCategory("Todos")}
+                className={`w-full px-3 py-2 flex items-center justify-between text-left text-xs rounded-lg transition-all ${
+                  activeCategory === "Todos"
+                    ? "bg-brand-50 text-brand-850 font-bold border border-brand-100"
+                    : "text-gray-650 hover:bg-gray-50/70"
+                }`}
+              >
+                <span className="flex items-center gap-2">
+                  <Tag className="w-3.5 h-3.5 text-brand-600" />
+                  <span>Exibir Todos</span>
+                </span>
+                <span className="text-[9px] bg-gray-100 text-gray-550 px-1.5 py-0.5 rounded-full border border-gray-200 font-bold leading-none">
+                  {items.filter(it => !it.isInTrash).length}
+                </span>
+              </button>
+
+              {/* Dynamic Configured Colored Categories */}
+              {categoriesList.map((cat) => {
+                const isExpanded = expandedCatId === cat.id;
+                const catWorkspaces = items.filter(
+                  (i) => !i.isInTrash && i.category.toLowerCase() === cat.name.toLowerCase()
+                );
+
+                return (
+                  <div key={cat.id} className="my-1 rounded-lg overflow-hidden border border-gray-150/20 bg-gray-50/10">
+                    <div className="w-full flex items-center justify-between pr-2 hover:bg-gray-50/70 rounded-lg group">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          onSelectCategory(cat.name);
+                          setExpandedCatId(isExpanded ? null : cat.id);
+                        }}
+                        className={`flex-1 px-3 py-2 flex items-center gap-2 text-left text-xs rounded-lg transition-all cursor-pointer ${
+                          activeCategory.toLowerCase() === cat.name.toLowerCase()
+                            ? "text-brand-900 font-bold"
+                            : "text-gray-650"
+                        }`}
+                      >
+                        <span 
+                          className="w-2.5 h-2.5 rounded-full flex-shrink-0" 
+                          style={{ backgroundColor: cat.color }}
+                        />
+                        <span className="truncate text-left text-xs font-semibold">{cat.name}</span>
+                      </button>
+                      
+                      <div className="flex items-center gap-1" onClick={(e) => e.stopPropagation()}>
+                        <button
+                          type="button"
+                          onClick={() => onDeleteCategory?.(cat.id)}
+                          className="p-1 text-gray-400 hover:text-red-500 rounded bg-transparent hover:bg-red-50 transition-all cursor-pointer opacity-0 group-hover:opacity-100"
+                          title="Excluir Categoria"
+                        >
+                          <Trash2 className="w-3" />
+                        </button>
+                        <span 
+                          className="text-[9px] px-1.5 py-0.5 rounded-full font-semibold leading-none border"
+                          style={{ backgroundColor: `${cat.color}15`, color: cat.color, borderColor: `${cat.color}25` }}
+                        >
+                          {catWorkspaces.length}
+                        </span>
+                        <ChevronRight 
+                          onClick={() => setExpandedCatId(isExpanded ? null : cat.id)}
+                          className={`w-3 h-3 text-gray-400 transition-transform duration-200 cursor-pointer ${isExpanded ? "rotate-90" : ""}`} 
+                        />
+                      </div>
+                    </div>
+
+                    {/* Nested expanded container space for creation of subcategories and view */}
+                    {isExpanded && (
+                      <div className="pl-3 pr-2 py-1.5 border-t border-dashed border-gray-100/60 space-y-1.5 bg-[#f5f8f6]/50">
+                        {/* Subcategory form */}
+                        <form
+                          onSubmit={(e) => {
+                            e.preventDefault();
+                            const input = e.currentTarget.elements.namedItem("subName") as HTMLInputElement;
+                            const val = input.value.trim();
+                            if (!val) return;
+                            
+                            const freshSub = {
+                              id: `sub-${Math.random().toString(36).substring(2, 6)}`,
+                              name: val
+                            };
+                            
+                            const updated = categoriesList.map(c => {
+                              if (c.id === cat.id) {
+                                  return {
+                                    ...c,
+                                    subcategories: [...(c.subcategories || []), freshSub]
+                                  };
+                              }
+                              return c;
+                            });
+                            onUpdateCategories(updated);
+                            input.value = "";
+                          }}
+                          className="flex items-center gap-1 bg-white p-1 rounded-md border border-gray-200/60"
+                        >
+                          <input
+                            type="text"
+                            name="subName"
+                            placeholder="Nova sub..."
+                            className="flex-1 text-[10px] bg-transparent outline-none px-1 border-none font-sans"
+                          />
+                          <button
+                            type="submit"
+                            className="bg-brand-600 hover:bg-brand-700 text-white rounded px-2 py-0.5 text-[9px] font-bold cursor-pointer transition-colors"
+                          >
+                            Criar
+                          </button>
+                        </form>
+
+                        {/* Display subcategories created */}
+                        {cat.subcategories && cat.subcategories.length > 0 && (
+                          <div className="flex flex-wrap gap-1 py-1">
+                            {cat.subcategories.map(sub => (
+                              <span 
+                                key={sub.id} 
+                                onClick={() => {
+                                  onSelectCategory(cat.name);
+                                  onSelectSubcategory?.(sub.name, cat.name);
+                                }}
+                                className="text-[9px] bg-brand-50 hover:bg-brand-100 text-brand-850 font-bold px-1.5 py-0.5 rounded cursor-pointer border border-brand-100/50 flex items-center gap-1 transition-all"
+                              >
+                                <span className="truncate">{sub.name}</span>
+                                <span
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    if (confirm(`Excluir a subcategoria "${sub.name}"?`)) {
+                                      // First delete matching workspaces from sidebar & system
+                                      items.forEach((it) => {
+                                        if (
+                                          !it.isInTrash &&
+                                          it.title.trim().toLowerCase() === sub.name.trim().toLowerCase() &&
+                                          it.category.toLowerCase() === cat.name.toLowerCase()
+                                        ) {
+                                          onDeleteItem(it.id);
+                                        }
+                                      });
+
+                                      const updated = categoriesList.map(c => {
+                                        if (c.id === cat.id) {
+                                          return {
+                                            ...c,
+                                            subcategories: (c.subcategories || []).filter(s => s.id !== sub.id)
+                                          };
+                                        }
+                                        return c;
+                                      });
+                                      onUpdateCategories(updated);
+                                    }
+                                  }}
+                                  className="text-gray-405 hover:text-red-650 font-extrabold text-[10px] pl-0.5"
+                                  title="Remover subcategoria"
+                                >
+                                  ×
+                                </span>
+                              </span>
+                            ))}
+                          </div>
+                        )}
+
+                        {/* Document List in expanded category */}
+                        <div className="pt-1.5 border-t border-gray-100/50 space-y-1 text-left">
+                          {catWorkspaces.length === 0 ? (
+                            <div className="text-[10px] text-gray-400 italic py-1 pl-1">
+                              Sem documentos vinculados.
+                            </div>
+                          ) : (
+                            catWorkspaces.map((item) => (
+                              <button
+                                key={item.id}
+                                onClick={() => onSelectItem(item.id)}
+                                className={`w-full px-2 py-1 flex items-center justify-between text-xs rounded transition-all select-none ${
+                                  activeItemId === item.id
+                                    ? "bg-white text-brand-900 border-l-2 border-brand-600 font-bold shadow-3xs"
+                                    : "text-gray-650 hover:bg-white/60"
+                                }`}
+                              >
+                                <span className="flex items-center gap-1.5 truncate py-0.5">
+                                  {getIconForType(item.type)}
+                                  <span className="truncate text-[11px] font-medium leading-none">{item.title}</span>
+                                </span>
+                                <button
+                                  type="button"
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    if (confirm(`Deseja enviar o documento "${item.title}" para a Lixeira?`)) {
+                                      onDeleteItem(item.id);
+                                    }
+                                  }}
+                                  className="px-1 text-gray-400 hover:text-red-500 rounded bg-transparent hover:bg-red-50 transition-all cursor-pointer"
+                                  title="Enviar para Lixeira"
+                                >
+                                  <Trash2 className="w-2.5 h-2.5" />
+                                </button>
+                              </button>
+                            ))
+                          )}
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+            
+            {/* Button to quickly trigger Settings -> Categories tab */}
+            <button
+              onClick={onOpenSettings}
+              className="w-full mt-2 text-center text-[10px] font-bold text-brand-800 hover:text-brand-950 flex items-center justify-center gap-1 py-1 hover:bg-brand-50/40 rounded-lg transition-all border border-dashed border-brand-100 cursor-pointer"
+            >
+              <Plus className="w-3 h-3" />
+              <span>Adicionar Categoria</span>
+            </button>
+          </div>
+        );
+
+      case "all-workspaces":
+        return (
+          <div className="px-2">
+            <span className="px-3 text-[10px] font-bold text-gray-400 uppercase tracking-wider block mb-1.5 text-left">
+              Todos os Workspaces
+            </span>
+            <div className="space-y-0.5 max-h-56 overflow-y-auto pr-1">
+              {items.filter(it => !it.isInTrash).length === 0 ? (
+                <span className="px-3 text-[11px] text-gray-400 italic block text-left">
+                  Nenhum workspace ativo.
+                </span>
+              ) : (
+                items.filter(it => !it.isInTrash).map((item) => (
+                  <button
+                    key={item.id}
+                    onClick={() => onSelectItem(item.id)}
+                    className={`w-full px-3 py-1.5 text-left text-xs rounded-lg flex items-center justify-between group transition-all ${
+                      activeItemId === item.id
+                        ? "bg-emerald-50 text-brand-900 border-l-2 border-brand-500 font-bold"
+                        : "text-gray-650 hover:bg-gray-50/60"
+                    }`}
+                  >
+                    <div className="flex items-center gap-2 truncate flex-1 justify-start">
+                      {getIconForType(item.type)}
+                      <span className="truncate text-[11.5px] font-medium">{item.title}</span>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        if (confirm(`Deseja enviar o documento "${item.title}" para a Lixeira?`)) {
+                          onDeleteItem(item.id);
+                        }
+                      }}
+                      className="opacity-0 group-hover:opacity-100 px-1 text-gray-400 hover:text-red-500 rounded bg-transparent hover:bg-red-50 transition-all cursor-pointer"
+                      title="Enviar para Lixeira"
+                    >
+                      <Trash2 className="w-2.5 h-2.5" />
+                    </button>
+                  </button>
+                ))
+              )}
+            </div>
+          </div>
+        );
+
+      case "lixeira":
+        const trashItems = items.filter(it => it.isInTrash);
+        return (
+          <div className="px-3">
+            <button
+              onClick={() => onSelectTrash?.()}
+              className="w-full border border-red-100 bg-red-50/10 hover:bg-red-50/30 rounded-xl p-2.5 mt-1 flex items-center justify-between text-left transition-all group cursor-pointer outline-none focus:ring-1 focus:ring-red-200"
+              title="Clique para abrir a lixeira em uma nova página"
+            >
+              <div className="flex items-center gap-2">
+                <Trash2 className="w-4 h-4 text-red-650 group-hover:scale-110 duration-150 transition-transform" />
+                <div>
+                  <span className="text-[10px] font-bold text-red-800 uppercase tracking-wider block leading-none">
+                    Lixeira
+                  </span>
+                  <span className="text-[9px] text-gray-400 block leading-none mt-1">
+                    {trashItems.length} {trashItems.length === 1 ? "excluído" : "excluídos"}
+                  </span>
+                </div>
+              </div>
+              <span className="text-[10px] font-bold text-red-650 opacity-65 group-hover:opacity-100 transition-all px-1.5 py-0.5 bg-red-50 rounded">
+                Ver →
+              </span>
+            </button>
+          </div>
+        );
+
+      case "favorites":
+        const favoriteDocs = items.filter(i => i.isFavorite && !i.isInTrash);
+        if (favoriteDocs.length === 0) return null;
+        return (
+          <div className="px-2">
+            <span className="px-3 text-[10px] font-bold text-gray-400 uppercase tracking-wider flex items-center gap-1 block mb-1.5 text-left">
+              <Star className="w-3 h-3 text-amber-500 fill-amber-500" />
+              <span>Favoritos</span>
+            </span>
+            <div className="space-y-0.5">
+              {favoriteDocs.map(item => (
+                <button
+                  key={item.id}
+                  onClick={() => onSelectItem(item.id)}
+                  className={`w-full px-3 py-1.5 text-left text-xs rounded-md flex items-center justify-between transition-all group ${
+                    activeItemId === item.id
+                      ? "bg-emerald-50 text-brand-900 border-l-2 border-brand-500 font-medium"
+                      : "text-gray-600 hover:bg-gray-50"
+                  }`}
+                >
+                  <span className="flex items-center gap-2 truncate justify-start">
+                    {getIconForType(item.type)}
+                    <span className="truncate text-[11px] font-medium leading-none">{item.title}</span>
+                  </span>
+                  <Bookmark className="w-2.5 h-2.5 text-amber-500 fill-amber-500 opacity-50 group-hover:opacity-100 transition-opacity flex-shrink-0" />
+                </button>
+              ))}
+            </div>
+          </div>
+        );
+
+      default:
+        return null;
+    }
+  };
+
   // Removed hardcoded categories
 
   return (
@@ -197,6 +730,17 @@ export default function Sidebar({
           {/* Sizing & Collapse actions row */}
           <div className="flex items-center gap-1 flex-shrink-0">
             <button
+              onClick={() => setIsLayoutMode(!isLayoutMode)}
+              className={`p-1 rounded cursor-pointer transition-all ${
+                isLayoutMode
+                  ? "bg-brand-100 text-brand-900 font-bold border border-brand-200"
+                  : "hover:bg-brand-50/80 text-gray-400 hover:text-brand-900"
+              }`}
+              title={isLayoutMode ? "Sair do modo de organizar menu" : "Organizar / Mover seções do menu"}
+            >
+              <SlidersHorizontal className="w-3.5 h-3.5" />
+            </button>
+            <button
               onClick={onToggleWide}
               className="p-1 rounded hover:bg-brand-50/80 text-gray-400 hover:text-brand-900 transition-all cursor-pointer"
               title={isWide ? "Estreitar menu lateral" : "Alargar menu lateral"}
@@ -234,448 +778,68 @@ export default function Sidebar({
         </div>
       </div>
 
-      {/* Floating Sparkle/AI Prompt Quick Bar */}
-      <div className="px-3 pt-3">
-        <div className="bg-gradient-to-r from-emerald-500/5 to-teal-500/5 hover:from-emerald-500/10 hover:to-teal-500/10 border border-brand-500/10 rounded-xl p-2.5 transition-all text-xs flex items-center gap-2">
-          <div className="w-6 h-6 rounded-lg bg-white shadow-sm flex items-center justify-center border border-brand-500/15">
-            <Sparkles className="w-3.5 h-3.5 text-brand-600" />
-          </div>
-          <div>
-            <span className="font-semibold text-brand-900 block leading-tight">NoteNext IA Ativa</span>
-            <span className="text-[10px] text-brand-700/70 block">Gere ideias e resumos em segundos</span>
-          </div>
-        </div>
-      </div>
-
-      {/* Search Input Filter */}
-      <div className="p-3">
-        <div className="relative">
-          <input
-            type="text"
-            value={searchVal}
-            onChange={handleSearch}
-            placeholder="Pesquisar documento..."
-            className="w-full bg-gray-50 hover:bg-gray-100 focus:bg-white pl-8 pr-3 py-1.5 text-xs rounded-lg border border-gray-150 focus:outline-none focus:border-brand-500 transition-all font-sans"
-          />
-          <Search className="w-3.5 h-3.5 text-gray-400 absolute left-2.5 top-2.5 pointer-events-none" />
-        </div>
-      </div>
-
-      {/* Primary Action Button (Add element) */}
-      <div className="px-3 pb-2 relative">
-        <button
-          onClick={() => setShowAddMenu(!showAddMenu)}
-          className="w-full py-2 bg-brand-600 hover:bg-brand-700 text-white font-semibold text-xs rounded-lg transition-all shadow-sm shadow-brand-600/10 hover:shadow-brand-600/20 flex items-center justify-center gap-1.5"
-        >
-          <Plus className="w-3.5 h-3.5" />
-          <span>Nova Área Criativa</span>
-        </button>
-
-        {showAddMenu && (
-          <>
-            <div 
-              className="fixed inset-0 z-30" 
-              onClick={() => setShowAddMenu(false)}
-            />
-            <div className="absolute top-full left-3 right-3 mt-1 bg-white rounded-lg border border-gray-100 shadow-xl py-1 z-40 text-xs">
-              <button
-                onClick={() => { onAddItem(WorkspaceType.NOTION_DOC); setShowAddMenu(false); }}
-                className="w-full px-3 py-2 text-left hover:bg-gray-50 text-gray-700 flex items-center gap-2.5"
-              >
-                <div className="w-6 h-6 rounded bg-blue-50 flex items-center justify-center text-blue-600">
-                  <BookOpen className="w-3.5 h-3.5" />
-                </div>
-                <div>
-                  <span className="font-semibold block">Espaço Notion</span>
-                  <span className="text-[10px] text-gray-400">Editor modular por blocos</span>
-                </div>
-              </button>
-
-              <button
-                onClick={() => { onAddItem(WorkspaceType.MILANOTE_CANVAS); setShowAddMenu(false); }}
-                className="w-full px-3 py-2 text-left hover:bg-gray-50 text-gray-700 border-t border-gray-50 flex items-center gap-2.5"
-              >
-                <div className="w-6 h-6 rounded bg-indigo-50 flex items-center justify-center text-indigo-600">
-                  <Layers className="w-3.5 h-3.5" />
-                </div>
-                <div>
-                  <span className="font-semibold block">Mural Milanote</span>
-                  <span className="text-[10px] text-gray-400">Canvas infinito visual livre</span>
-                </div>
-              </button>
-
-              <button
-                onClick={() => { onAddItem(WorkspaceType.KEEP_NOTES); setShowAddMenu(false); }}
-                className="w-full px-3 py-2 text-left hover:bg-gray-50 text-gray-700 border-t border-gray-50 flex items-center gap-2.5"
-              >
-                <div className="w-6 h-6 rounded bg-amber-50 flex items-center justify-center text-amber-600">
-                  <StickyNote className="w-3.5 h-3.5" />
-                </div>
-                <div>
-                  <span className="font-semibold block">Notas Keep</span>
-                  <span className="text-[10px] text-gray-400">Cards e checklists ágeis</span>
-                </div>
-              </button>
-            </div>
-          </>
-        )}
-      </div>
-
-      {/* Smart Notebook general leaves tracker button */}
-      {(() => {
-        const allNotebookPages = items.reduce<any[]>((acc, item) => {
-          const pages = item.notebookPages || [];
-          return [
-            ...acc,
-            ...pages.map(page => ({
-              ...page,
-              parentWorkspaceId: item.id,
-              parentWorkspaceTitle: item.title
-            }))
-          ];
-        }, []);
-
-        return (
-          <div className="px-3 pb-2 pt-1">
-            <button
-              onClick={() => {
-                if (onOpenNotebook) {
-                  onOpenNotebook();
-                } else if (onSelectNotebookPagesHub) {
-                  onSelectNotebookPagesHub();
-                }
-              }}
-              className="w-full py-2 bg-emerald-50 hover:bg-emerald-100 border border-emerald-200 hover:border-emerald-300 text-emerald-850 font-bold text-xs rounded-lg transition-all shadow-3xs flex items-center justify-between px-3 cursor-pointer"
-              title="Abrir o Caderno Inteligente e Ver Notas"
-            >
-              <span className="flex items-center gap-1.5">
-                <BookOpen className="w-3.5 h-3.5 text-emerald-650 animate-pulse" />
-                <span>Caderno Inteligente</span>
-              </span>
-              <span className="bg-[#054d3d] text-emerald-50 text-[10px] px-2 py-0.5 rounded-full font-bold leading-none">
-                {allNotebookPages.length} {allNotebookPages.length === 1 ? "folha" : "folhas"}
-              </span>
-            </button>
-          </div>
-        );
-      })()}
-
-      {/* Main Navigator Container */}
-      <div className="flex-1 overflow-y-auto px-2 space-y-4 py-2">
-        {/* Categories / Tags filter */}
-        <div>
-          <span className="px-3 text-[10px] font-bold text-gray-400 uppercase tracking-wider block mb-1.5">
-            Categorias
-          </span>
-          <div className="space-y-0.5">
-            {/* Standard "Todos" Category Filter */}
-            <button
-              onClick={() => onSelectCategory("Todos")}
-              className={`w-full px-3 py-2 flex items-center justify-between text-left text-xs rounded-lg transition-all ${
-                activeCategory === "Todos"
-                  ? "bg-brand-50 text-brand-850 font-bold border border-brand-100"
-                  : "text-gray-650 hover:bg-gray-50/70"
+      {/* Scrollable Container Body for Movable Sections */}
+      <div className="flex-1 overflow-y-auto px-1 py-1.5 space-y-4">
+        {sections.map((section, idx) => {
+          if (!section.visible && !isLayoutMode) return null;
+          
+          return (
+            <motion.div
+              key={section.id}
+              layout
+              className={`relative transition-all duration-200 ${
+                isLayoutMode 
+                  ? "border border-dashed border-brand-500/40 rounded-xl p-1.5 bg-brand-50/5 shadow-2xs" 
+                  : ""
               }`}
             >
-              <span className="flex items-center gap-2">
-                <Tag className="w-3.5 h-3.5 text-brand-600" />
-                <span>Exibir Todos</span>
-              </span>
-              <span className="text-[9px] bg-gray-100 text-gray-550 px-1.5 py-0.5 rounded-full border border-gray-200 font-bold leading-none">
-                {items.filter(it => !it.isInTrash).length}
-              </span>
-            </button>
- 
-            {/* Dynamic Configured Colored Categories */}
-            {categoriesList.map((cat) => {
-              const isExpanded = expandedCatId === cat.id;
-              const catWorkspaces = items.filter(
-                (i) => !i.isInTrash && i.category.toLowerCase() === cat.name.toLowerCase()
-              );
- 
-              return (
-                <div key={cat.id} className="my-1 rounded-lg overflow-hidden border border-gray-150/20 bg-gray-50/10">
-                  <div className="w-full flex items-center justify-between pr-2 hover:bg-gray-50/70 rounded-lg group">
+              {isLayoutMode && (
+                <div className="flex items-center justify-between text-[10px] bg-brand-50/90 rounded-lg px-2.5 py-1 mb-1.5 font-bold text-brand-900 border border-brand-200 shadow-3xs select-none">
+                  <span className="flex items-center gap-1.5 truncate">
+                    <Move className="w-3.5 h-3.5 text-brand-605" />
+                    <span className="truncate">{section.name}</span>
+                  </span>
+                  <div className="flex items-center gap-1">
                     <button
                       type="button"
-                      onClick={() => {
-                        onSelectCategory(cat.name);
-                        setExpandedCatId(isExpanded ? null : cat.id);
-                      }}
-                      className={`flex-1 px-3 py-2 flex items-center gap-2 text-left text-xs rounded-lg transition-all cursor-pointer ${
-                        activeCategory.toLowerCase() === cat.name.toLowerCase()
-                          ? "text-brand-900 font-bold"
-                          : "text-gray-650"
-                      }`}
+                      onClick={() => toggleSectionVisibility(section.id)}
+                      className="p-0.5 hover:bg-white rounded transition-colors text-brand-850 cursor-pointer"
+                      title={section.visible ? "Esconder seção" : "Mostrar seção"}
                     >
-                      <span 
-                        className="w-2.5 h-2.5 rounded-full flex-shrink-0" 
-                        style={{ backgroundColor: cat.color }}
-                      />
-                      <span className="truncate">{cat.name}</span>
-                    </button>
-                    
-                    <div className="flex items-center gap-1" onClick={(e) => e.stopPropagation()}>
-                      <button
-                        type="button"
-                        onClick={() => onDeleteCategory?.(cat.id)}
-                        className="p-1 text-gray-400 hover:text-red-500 rounded bg-transparent hover:bg-red-50 transition-all cursor-pointer opacity-0 group-hover:opacity-100"
-                        title="Excluir Categoria"
-                      >
-                        <Trash2 className="w-3 h-3" />
-                      </button>
-                      <span 
-                        className="text-[9px] px-1.5 py-0.5 rounded-full font-semibold leading-none border"
-                        style={{ backgroundColor: `${cat.color}15`, color: cat.color, borderColor: `${cat.color}25` }}
-                      >
-                        {catWorkspaces.length}
-                      </span>
-                      <ChevronRight 
-                        onClick={() => setExpandedCatId(isExpanded ? null : cat.id)}
-                        className={`w-3 h-3 text-gray-400 transition-transform duration-200 cursor-pointer ${isExpanded ? "rotate-90" : ""}`} 
-                      />
-                    </div>
-                  </div>
- 
-                  {/* Nested expanded container space for creation of subcategories and view */}
-                  {isExpanded && (
-                    <div className="pl-3 pr-2 py-1.5 border-t border-dashed border-gray-100/60 space-y-1.5 bg-[#f5f8f6]/50">
-                      {/* Subcategory form */}
-                      <form
-                        onSubmit={(e) => {
-                          e.preventDefault();
-                          const input = e.currentTarget.elements.namedItem("subName") as HTMLInputElement;
-                          const val = input.value.trim();
-                          if (!val) return;
-                          
-                          const freshSub = {
-                            id: `sub-${Math.random().toString(36).substring(2, 6)}`,
-                            name: val
-                          };
-                          
-                          const updated = categoriesList.map(c => {
-                            if (c.id === cat.id) {
-                              return {
-                                ...c,
-                                subcategories: [...(c.subcategories || []), freshSub]
-                              };
-                            }
-                            return c;
-                          });
-                          onUpdateCategories(updated);
-                          input.value = "";
-                        }}
-                        className="flex items-center gap-1 bg-white p-1 rounded-md border border-gray-200/60"
-                      >
-                        <input
-                          type="text"
-                          name="subName"
-                          placeholder="Nova sub..."
-                          className="flex-1 text-[10px] bg-transparent outline-none px-1 border-none font-sans"
-                        />
-                        <button
-                          type="submit"
-                          className="bg-brand-600 hover:bg-brand-700 text-white rounded px-2 py-0.5 text-[9px] font-bold cursor-pointer transition-colors"
-                        >
-                          Criar
-                        </button>
-                      </form>
-
-                      {/* Display subcategories created */}
-                      {cat.subcategories && cat.subcategories.length > 0 && (
-                        <div className="flex flex-wrap gap-1 py-1">
-                          {cat.subcategories.map(sub => (
-                            <span 
-                              key={sub.id} 
-                              onClick={() => {
-                                onSelectCategory(cat.name);
-                                onSelectSubcategory?.(sub.name, cat.name);
-                              }}
-                              className="text-[9px] bg-brand-50 hover:bg-brand-100 text-brand-850 font-bold px-1.5 py-0.5 rounded cursor-pointer border border-brand-100/50 flex items-center gap-1 transition-all"
-                            >
-                              <span>{sub.name}</span>
-                              <span
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  if (confirm(`Excluir a subcategoria "${sub.name}"?`)) {
-                                    const updated = categoriesList.map(c => {
-                                      if (c.id === cat.id) {
-                                        return {
-                                          ...c,
-                                          subcategories: (c.subcategories || []).filter(s => s.id !== sub.id)
-                                        };
-                                      }
-                                      return c;
-                                    });
-                                    onUpdateCategories(updated);
-                                  }
-                                }}
-                                className="text-gray-400 hover:text-red-650 font-extrabold text-[10px] pl-0.5"
-                                title="Remover subcategoria"
-                              >
-                                ×
-                              </span>
-                            </span>
-                          ))}
-                        </div>
+                      {section.visible ? (
+                        <Eye className="w-3.5 h-3.5 text-emerald-600" />
+                      ) : (
+                        <EyeOff className="w-3.5 h-3.5 text-gray-400" />
                       )}
- 
-                      {/* Document List in expanded category */}
-                      <div className="pt-1.5 border-t border-gray-100/50 space-y-1">
-                        {catWorkspaces.length === 0 ? (
-                          <div className="text-[10px] text-gray-400 italic py-1 pl-1">
-                            Sem documentos vinculados.
-                          </div>
-                        ) : (
-                          catWorkspaces.map((item) => (
-                            <button
-                              key={item.id}
-                              onClick={() => onSelectItem(item.id)}
-                              className={`w-full px-2 py-1 flex items-center justify-between text-xs rounded transition-all select-none ${
-                                activeItemId === item.id
-                                  ? "bg-white text-brand-900 border-l-2 border-brand-600 font-bold shadow-3xs"
-                                  : "text-gray-650 hover:bg-white/60"
-                              }`}
-                            >
-                              <span className="flex items-center gap-1.5 truncate py-0.5">
-                                {getIconForType(item.type)}
-                                <span className="truncate text-[11px] font-medium leading-none">{item.title}</span>
-                              </span>
-                              <button
-                                type="button"
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  if (confirm(`Deseja enviar o documento "${item.title}" para a Lixeira?`)) {
-                                    onDeleteItem(item.id);
-                                  }
-                                }}
-                                className="px-1 text-gray-400 hover:text-red-500 rounded bg-transparent hover:bg-red-50 transition-all cursor-pointer"
-                                title="Enviar para Lixeira"
-                              >
-                                <Trash2 className="w-2.5 h-2.5" />
-                              </button>
-                            </button>
-                          ))
-                        )}
-                      </div>
-                    </div>
-                  )}
-                </div>
-              );
-            })}
-          </div>
-          
-          {/* Button to quickly trigger Settings -> Categories tab */}
-          <button
-            onClick={onOpenSettings}
-            className="w-full mt-2 text-center text-[10px] font-bold text-brand-800 hover:text-brand-950 flex items-center justify-center gap-1 py-1 hover:bg-brand-50/40 rounded-lg transition-all border border-dashed border-brand-100 cursor-pointer"
-          >
-            <Plus className="w-3 h-3" />
-            <span>Adicionar Categoria</span>
-          </button>
-        </div>
-
-        {/* Todos os Workspaces Complete List */}
-        <div>
-          <span className="px-3 text-[10px] font-bold text-gray-400 uppercase tracking-wider block mb-1.5">
-            Todos os Workspaces
-          </span>
-          <div className="space-y-0.5 max-h-56 overflow-y-auto pr-1">
-            {items.filter(it => !it.isInTrash).length === 0 ? (
-              <span className="px-3 text-[11px] text-gray-400 italic block">
-                Nenhum workspace ativo.
-              </span>
-            ) : (
-              items.filter(it => !it.isInTrash).map((item) => (
-                <button
-                  key={item.id}
-                  onClick={() => onSelectItem(item.id)}
-                  className={`w-full px-3 py-1.5 text-left text-xs rounded-lg flex items-center justify-between group transition-all ${
-                    activeItemId === item.id
-                      ? "bg-emerald-50 text-brand-900 border-l-2 border-brand-500 font-bold"
-                      : "text-gray-650 hover:bg-gray-50/60"
-                  }`}
-                >
-                  <div className="flex items-center gap-2 truncate flex-1">
-                    {getIconForType(item.type)}
-                    <span className="truncate text-[11.5px] font-medium">{item.title}</span>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => moveSection(idx, "up")}
+                      disabled={idx === 0}
+                      className="p-0.5 hover:bg-white rounded transition-colors text-brand-850 cursor-pointer disabled:opacity-30 disabled:pointer-events-none"
+                      title="Mover para Cima"
+                    >
+                      <ChevronUp className="w-3.5 h-3.5" />
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => moveSection(idx, "down")}
+                      disabled={idx === sections.length - 1}
+                      className="p-0.5 hover:bg-white rounded transition-colors text-brand-850 cursor-pointer disabled:opacity-30 disabled:pointer-events-none"
+                      title="Mover para Baixo"
+                    >
+                      <ChevronDown className="w-3.5 h-3.5" />
+                    </button>
                   </div>
-                  <button
-                    type="button"
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      if (confirm(`Deseja enviar o documento "${item.title}" para a Lixeira?`)) {
-                        onDeleteItem(item.id);
-                      }
-                    }}
-                    className="opacity-0 group-hover:opacity-100 px-1 text-gray-400 hover:text-red-500 rounded bg-transparent hover:bg-red-50 transition-all cursor-pointer"
-                    title="Enviar para Lixeira"
-                  >
-                    <Trash2 className="w-2.5 h-2.5" />
-                  </button>
-                </button>
-              ))
-            )}
-          </div>
-        </div>
-                {/* Lixeira (Recycle Bin Section with 30-day calculation rule) */}
-        {(() => {
-          const trashItems = items.filter(it => it.isInTrash);
-          return (
-            <button
-              onClick={() => onSelectTrash?.()}
-              className="w-full border border-red-100 bg-red-50/10 hover:bg-red-50/30 rounded-xl p-2.5 mt-2 flex items-center justify-between text-left transition-all group cursor-pointer outline-none focus:ring-1 focus:ring-red-200 animate-fade-in"
-              title="Clique para abrir a lixeira em uma nova página"
-            >
-              <div className="flex items-center gap-2">
-                <Trash2 className="w-4 h-4 text-red-650 group-hover:scale-110 duration-150 transition-transform" />
-                <div>
-                  <span className="text-[10px] font-bold text-red-800 uppercase tracking-wider block">
-                    Lixeira
-                  </span>
-                  <span className="text-[9px] text-gray-400 block leading-none mt-0.5">
-                    {trashItems.length} {trashItems.length === 1 ? "excluído" : "excluídos"}
-                  </span>
                 </div>
+              )}
+              
+              <div className={!section.visible ? "opacity-35 pointer-events-none" : ""}>
+                {renderSectionContent(section.id)}
               </div>
-              <span className="text-[10px] font-bold text-red-650 opacity-65 group-hover:opacity-100 transition-all px-1.5 py-0.5 bg-red-50 rounded">
-                Ver →
-              </span>
-            </button>
+            </motion.div>
           );
-        })()}
-
-        {/* Favorite Starred Items */}
-        {items.some(i => i.isFavorite) && (
-          <div>
-            <span className="px-3 text-[10px] font-bold text-gray-400 uppercase tracking-wider flex items-center gap-1 block mb-1.5">
-              <Star className="w-3 h-3 text-amber-500 fill-amber-500" />
-              <span>Favoritos</span>
-            </span>
-            <div className="space-y-0.5">
-              {items
-                .filter(i => i.isFavorite)
-                .map(item => (
-                  <button
-                    key={item.id}
-                    onClick={() => onSelectItem(item.id)}
-                    className={`w-full px-3 py-1.5 text-left text-xs rounded-md flex items-center justify-between transition-all group ${
-                      activeItemId === item.id
-                        ? "bg-emerald-50 text-brand-900 border-l-2 border-brand-500 font-medium"
-                        : "text-gray-600 hover:bg-gray-50"
-                    }`}
-                  >
-                    <span className="flex items-center gap-2 truncate">
-                      {getIconForType(item.type)}
-                      <span className="truncate">{item.title}</span>
-                    </span>
-                    <Bookmark className="w-2.5 h-2.5 text-amber-500 fill-amber-500 opacity-50 group-hover:opacity-100 transition-opacity flex-shrink-0" />
-                  </button>
-                ))}
-            </div>
-          </div>
-        )}
-
+        })}
       </div>
 
       {/* Sidebar Footer User Info block */}
