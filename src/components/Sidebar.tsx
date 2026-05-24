@@ -20,7 +20,8 @@ import {
   Bookmark,
   Signature,
   Settings,
-  RefreshCw
+  RefreshCw,
+  Trash2
 } from "lucide-react";
 import { WorkspaceItem, WorkspaceType, UserSession, WorkspaceCategory } from "../types";
 
@@ -40,6 +41,10 @@ interface SidebarProps {
   onSelectCategory: (category: string) => void;
   categoriesList: WorkspaceCategory[];
   onOpenSettings: () => void;
+  isWide: boolean;
+  onToggleWide: () => void;
+  onCollapse: () => void;
+  onDeleteItem: (id: string) => void;
 }
 
 export default function Sidebar({
@@ -53,7 +58,11 @@ export default function Sidebar({
   activeCategory,
   onSelectCategory,
   categoriesList,
-  onOpenSettings
+  onOpenSettings,
+  isWide,
+  onToggleWide,
+  onCollapse,
+  onDeleteItem
 }: SidebarProps) {
   const [showAddMenu, setShowAddMenu] = useState(false);
   const [searchVal, setSearchVal] = useState("");
@@ -89,34 +98,62 @@ export default function Sidebar({
   // Removed hardcoded categories
 
   return (
-    <aside className="w-64 bg-[#fcfdfd] border-r border-[#eaf2ed] h-screen flex flex-col font-sans select-none relative z-20">
+    <aside className={`${isWide ? "w-80" : "w-64"} bg-[#fcfdfd] border-r border-[#eaf2ed] h-screen flex flex-col font-sans select-none relative z-20 transition-all duration-300`}>
       
       {/* Top Application Ribbon */}
       <div className="p-4 border-b border-[#eaf2ed] flex flex-col gap-2.5">
-        <div className="flex items-center gap-2.5">
-          {/* Animated Hand Writing Logo */}
-          <div className="w-9 h-9 rounded-xl bg-gradient-to-tr from-brand-600 to-emerald-500 flex items-center justify-center shadow-lg shadow-brand-600/10 text-white relative overflow-hidden group">
-            <motion.div
-              animate={{ 
-                x: [0, 2.5, -1, 3, 0], 
-                y: [0, -1.2, 2.2, -1, 0],
-                rotate: [0, 6, -4, 7, 0] 
-              }}
-              transition={{ repeat: Infinity, duration: 2.8, ease: "easeInOut" }}
-            >
-              <svg className="w-5 h-5 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2.5">
-                <path strokeLinecap="round" strokeLinejoin="round" d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" />
-              </svg>
-            </motion.div>
-            <div className="absolute bottom-0.5 left-1/2 -translate-x-1/2 w-4.5 h-0.5 bg-emerald-300 rounded-full animate-pulse" />
+        <div className="flex items-center justify-between gap-1">
+          <div className="flex items-center gap-2.5 truncate flex-1">
+            {/* Animated Hand Writing Logo */}
+            <div className="w-9 h-9 rounded-xl bg-gradient-to-tr from-brand-600 to-emerald-500 flex items-center justify-center shadow-lg shadow-brand-600/10 text-white relative overflow-hidden group flex-shrink-0">
+              <motion.div
+                animate={{ 
+                  x: [0, 2.5, -1, 3, 0], 
+                  y: [0, -1.2, 2.2, -1, 0],
+                  rotate: [0, 6, -4, 7, 0] 
+                }}
+                transition={{ repeat: Infinity, duration: 2.8, ease: "easeInOut" }}
+              >
+                <svg className="w-5 h-5 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2.5">
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" />
+                </svg>
+              </motion.div>
+              <div className="absolute bottom-0.5 left-1/2 -translate-x-1/2 w-4.5 h-0.5 bg-emerald-300 rounded-full animate-pulse" />
+            </div>
+
+            <div className="truncate">
+              <h2 className="text-sm font-black font-display text-gray-900 tracking-tight leading-none flex items-center gap-1">
+                <span>NoteNext</span>
+                <span className="text-[8px] bg-brand-100 text-[#064e3b] font-bold px-1.5 py-0.5 rounded uppercase font-sans tracking-wide">Pro</span>
+              </h2>
+              <span className="text-[10px] text-gray-405 mt-1 block truncate leading-none">luiz.rogerios@gmail.com</span>
+            </div>
           </div>
 
-          <div className="truncate">
-            <h2 className="text-sm font-black font-display text-gray-900 tracking-tight leading-none flex items-center gap-1">
-              <span>NoteNext</span>
-              <span className="text-[8px] bg-brand-100 text-[#064e3b] font-bold px-1.5 py-0.5 rounded uppercase font-sans tracking-wide">Pro</span>
-            </h2>
-            <span className="text-[10px] text-gray-400 mt-1 block truncate leading-none">luiz.rogerios@gmail.com</span>
+          {/* Sizing & Collapse actions row */}
+          <div className="flex items-center gap-1 flex-shrink-0">
+            <button
+              onClick={onToggleWide}
+              className="p-1 rounded hover:bg-brand-50/80 text-gray-400 hover:text-brand-900 transition-all cursor-pointer"
+              title={isWide ? "Estreitar menu lateral" : "Alargar menu lateral"}
+            >
+              <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2.5">
+                {isWide ? (
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M11 19l-7-7 7-7M20 19l-7-7 7-7" />
+                ) : (
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M13 5l7 7-7 7M4 5l7 7-7 7" />
+                )}
+              </svg>
+            </button>
+            <button
+              onClick={onCollapse}
+              className="p-1 rounded hover:bg-neutral-100 text-gray-400 hover:text-red-500 transition-all cursor-pointer"
+              title="Esconder menu lateral completamente"
+            >
+              <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2.5">
+                <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+              </svg>
+            </button>
           </div>
         </div>
 
@@ -124,6 +161,12 @@ export default function Sidebar({
         <div className="flex items-center gap-1.5 text-[9px] font-bold text-emerald-800 bg-emerald-50 px-2.5 py-1 rounded-xl border border-emerald-100/60 w-max leading-none shadow-3xs">
           <RefreshCw className="w-3 h-3 text-emerald-600 animate-spin-slow" />
           <span>✓ Auto Save Active</span>
+        </div>
+
+        {/* Notion Style Edit Mode Label - Exact Match to prompt */}
+        <div className="flex items-center gap-1 text-[9px] font-bold text-blue-850 bg-blue-50/70 px-2.5 py-1 rounded-xl border border-blue-100/60 w-max leading-none shadow-3xs">
+          <span className="w-1.5 h-1.5 rounded-full bg-blue-500 animate-pulse" />
+          <span>Modo Edição Notion-style</span>
         </div>
       </div>
 
@@ -327,10 +370,10 @@ export default function Sidebar({
                   className={`w-full px-3 py-1.5 text-left text-xs rounded-md flex items-center justify-between group transition-all ${
                     activeItemId === item.id
                       ? "bg-brand-50/70 text-brand-900 border-l-2 border-brand-600 font-semibold"
-                      : "text-gray-600 hover:bg-gray-50/50"
+                      : "text-gray-650 hover:bg-gray-50/50"
                   }`}
                 >
-                  <div className="flex items-center gap-2 truncate">
+                  <div className="flex items-center gap-2 truncate flex-1">
                     {getIconForType(item.type)}
                     <div className="truncate">
                       <span className="block truncate leading-tight">{item.title}</span>
@@ -339,7 +382,23 @@ export default function Sidebar({
                       </span>
                     </div>
                   </div>
-                  <ChevronRight className="w-3 h-3 text-gray-300 opacity-0 group-hover:opacity-100 transition-opacity" />
+                  
+                  {/* Subtle actions grouping on hover inside Sidebar lists */}
+                  <div className="flex items-center gap-1">
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        if (confirm(`Tem certeza que gostaria de excluir a área "${item.title}"?`)) {
+                          onDeleteItem(item.id);
+                        }
+                      }}
+                      title="Excluir Área Criativa"
+                      className="opacity-0 group-hover:opacity-100 p-1 text-gray-400 hover:text-red-500 rounded hover:bg-red-50 transition-all cursor-pointer"
+                    >
+                      <Trash2 className="w-3.5 h-3.5" />
+                    </button>
+                    <ChevronRight className="w-3 h-3 text-gray-300 opacity-60 group-hover:opacity-100 group-hover:translate-x-0.5 transition-all flex-shrink-0" />
+                  </div>
                 </button>
               ))
             )}

@@ -152,6 +152,10 @@ export default function App() {
   const [activeCategory, setActiveCategory] = useState<string>("Todos");
   const [searchQuery, setSearchQuery] = useState("");
 
+  // Sidebar sizing & collapse states - exact matches to prompt requests
+  const [isSidebarWide, setIsSidebarWide] = useState(false);
+  const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
+
   // AI Drawer and Loading states
   const [isAiOpen, setIsAiOpen] = useState(false);
   const [isAiLoading, setIsAiLoading] = useState(false);
@@ -410,22 +414,38 @@ export default function App() {
   }
 
   return (
-    <div className="flex h-screen overflow-hidden bg-[#fafbfb] font-sans">
+    <div className="flex h-screen overflow-hidden bg-[#fafbfb] font-sans relative">
       
       {/* 1. Left Navigation Sidebar */}
-      <Sidebar
-        user={session}
-        items={filteredItems}
-        activeItemId={activeItemId}
-        onSelectItem={handleSelectItem}
-        onAddItem={handleAddItem}
-        onLogout={handleLogout}
-        onSearchChange={setSearchQuery}
-        activeCategory={activeCategory}
-        onSelectCategory={setActiveCategory}
-        categoriesList={categories}
-        onOpenSettings={() => setIsConfigOpen(true)}
-      />
+      {!isSidebarCollapsed ? (
+        <Sidebar
+          user={session}
+          items={filteredItems}
+          activeItemId={activeItemId}
+          onSelectItem={handleSelectItem}
+          onAddItem={handleAddItem}
+          onLogout={handleLogout}
+          onSearchChange={setSearchQuery}
+          activeCategory={activeCategory}
+          onSelectCategory={setActiveCategory}
+          categoriesList={categories}
+          onOpenSettings={() => setIsConfigOpen(true)}
+          isWide={isSidebarWide}
+          onToggleWide={() => setIsSidebarWide(!isSidebarWide)}
+          onCollapse={() => setIsSidebarCollapsed(true)}
+          onDeleteItem={deleteCurrentWorkspace}
+        />
+      ) : (
+        /* Floating Restore Menu Button on left edge when collapsed */
+        <button
+          onClick={() => setIsSidebarCollapsed(false)}
+          className="absolute left-4 top-4 z-30 p-2.5 bg-[#fcfdfd] hover:bg-brand-50 border border-brand-100 text-brand-850 hover:text-brand-950 rounded-xl shadow-lg transition-all flex items-center gap-2 cursor-pointer group"
+          title="Restaurar Menu Lateral"
+        >
+          <Menu className="w-4 h-4 text-brand-600 group-hover:rotate-90 transition-transform" />
+          <span className="text-xs font-extrabold font-sans">Restaurar Menu</span>
+        </button>
+      )}
 
       {/* 2. Main Workspace Editor Router Container */}
       <main className="flex-1 overflow-hidden flex flex-col relative bg-white">
