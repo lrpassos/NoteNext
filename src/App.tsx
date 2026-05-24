@@ -434,6 +434,7 @@ export default function App() {
           onToggleWide={() => setIsSidebarWide(!isSidebarWide)}
           onCollapse={() => setIsSidebarCollapsed(true)}
           onDeleteItem={deleteCurrentWorkspace}
+          onUpdateCategories={setCategories}
         />
       ) : (
         /* Floating Restore Menu Button on left edge when collapsed */

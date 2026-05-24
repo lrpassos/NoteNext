@@ -59,6 +59,7 @@ export interface WorkspaceCategory {
   name: string;
   color: string; // tailwind class or hex
   order: number;
+  subcategories?: { id: string; name: string }[];
 }
 
 export interface NotebookPage {

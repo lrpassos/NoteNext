@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { motion } from "motion/react";
 import { 
   Plus, 
@@ -45,6 +45,7 @@ interface SidebarProps {
   onToggleWide: () => void;
   onCollapse: () => void;
   onDeleteItem: (id: string) => void;
+  onUpdateCategories: (cats: WorkspaceCategory[]) => void;
 }
 
 export default function Sidebar({
@@ -62,10 +63,46 @@ export default function Sidebar({
   isWide,
   onToggleWide,
   onCollapse,
-  onDeleteItem
+  onDeleteItem,
+  onUpdateCategories
 }: SidebarProps) {
   const [showAddMenu, setShowAddMenu] = useState(false);
   const [searchVal, setSearchVal] = useState("");
+  const [expandedCatId, setExpandedCatId] = useState<string | null>(null);
+  const [newSubcatName, setNewSubcatName] = useState("");
+  
+  // Custom sidebar width state and dragging state
+  const [sidebarWidth, setSidebarWidth] = useState<number>(() => {
+    const saved = localStorage.getItem("notenext_sidebar_width");
+    if (saved) return parseInt(saved, 10);
+    return isWide ? 320 : 256;
+  });
+  const [isResizing, setIsResizing] = useState(false);
+
+  useEffect(() => {
+    setSidebarWidth(isWide ? 320 : 256);
+  }, [isWide]);
+
+  const handleMouseDown = (e: React.MouseEvent) => {
+    e.preventDefault();
+    setIsResizing(true);
+
+    const handleMouseMove = (moveEvent: MouseEvent) => {
+      const newWidth = Math.max(180, Math.min(600, moveEvent.clientX));
+      setSidebarWidth(newWidth);
+    };
+
+    const handleMouseUp = (upEvent: MouseEvent) => {
+      setIsResizing(false);
+      const finalWidth = Math.max(180, Math.min(600, upEvent.clientX));
+      localStorage.setItem("notenext_sidebar_width", finalWidth.toString());
+      window.removeEventListener("mousemove", handleMouseMove);
+      window.removeEventListener("mouseup", handleMouseUp);
+    };
+
+    window.addEventListener("mousemove", handleMouseMove);
+    window.addEventListener("mouseup", handleMouseUp);
+  };
 
   const handleSearch = (e: React.ChangeEvent<HTMLInputElement>) => {
     const val = e.target.value;
@@ -98,7 +135,18 @@ export default function Sidebar({
   // Removed hardcoded categories
 
   return (
-    <aside className={`${isWide ? "w-80" : "w-64"} bg-[#fcfdfd] border-r border-[#eaf2ed] h-screen flex flex-col font-sans select-none relative z-20 transition-all duration-300`}>
+    <aside 
+      style={{ width: `${sidebarWidth}px`, transition: isResizing ? "none" : "width 240ms cubic-bezier(0.16, 1, 0.3, 1)" }}
+      className="bg-[#fcfdfd] border-r border-[#eaf2ed] h-screen flex flex-col font-sans select-none relative z-20"
+    >
+      {/* Resizable drag border handle */}
+      <div 
+        onMouseDown={handleMouseDown}
+        className={`absolute right-0 top-0 bottom-0 w-1.5 cursor-col-resize hover:bg-brand-500/20 active:bg-brand-500/40 z-30 transition-colors ${
+          isResizing ? "bg-brand-500/30 w-2" : ""
+        }`}
+        title="Arraste para ajustar o tamanho do menu"
+      />
       
       {/* Top Application Ribbon */}
       <div className="p-4 border-b border-[#eaf2ed] flex flex-col gap-2.5">
@@ -284,31 +332,137 @@ export default function Sidebar({
             </button>
 
             {/* Dynamic Configured Colored Categories */}
-            {categoriesList.map((cat) => (
-              <button
-                key={cat.id}
-                onClick={() => onSelectCategory(cat.name)}
-                className={`w-full px-3 py-1 flex items-center justify-between text-left text-xs rounded-lg transition-all ${
-                  activeCategory.toLowerCase() === cat.name.toLowerCase()
-                    ? "bg-gray-100 text-gray-900 font-bold"
-                    : "text-gray-650 hover:bg-gray-50/70"
-                }`}
-              >
-                <span className="flex items-center gap-2 truncate">
-                  <span 
-                    className="w-2 h-2 rounded-full flex-shrink-0" 
-                    style={{ backgroundColor: cat.color }}
-                  />
-                  <span className="truncate">{cat.name}</span>
-                </span>
-                <span 
-                  className="text-[9.5px] px-1.5 py-0.5 rounded-full font-semibold leading-none border"
-                  style={{ backgroundColor: `${cat.color}15`, color: cat.color, borderColor: `${cat.color}25` }}
-                >
-                  {items.filter(i => i.category.toLowerCase() === cat.name.toLowerCase()).length}
-                </span>
-              </button>
-            ))}
+            {categoriesList.map((cat) => {
+              const isExpanded = expandedCatId === cat.id;
+              const subcats = cat.subcategories || [];
+              const catWorkspaces = items.filter(
+                (i) => i.category.toLowerCase() === cat.name.toLowerCase()
+              );
+
+              return (
+                <div key={cat.id} className="my-1 rounded-lg overflow-hidden border border-gray-150/20 bg-gray-50/10">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      onSelectCategory(cat.name);
+                      setExpandedCatId(isExpanded ? null : cat.id);
+                    }}
+                    className={`w-full px-3 py-2 flex items-center justify-between text-left text-xs rounded-lg transition-all cursor-pointer ${
+                      activeCategory.toLowerCase() === cat.name.toLowerCase()
+                        ? "bg-brand-50/60 text-brand-900 font-bold border border-brand-100"
+                        : "text-gray-650 hover:bg-gray-50/70"
+                    }`}
+                  >
+                    <span className="flex items-center gap-2 truncate">
+                      <span 
+                        className="w-2.5 h-2.5 rounded-full flex-shrink-0" 
+                        style={{ backgroundColor: cat.color }}
+                      />
+                      <span className="truncate">{cat.name}</span>
+                    </span>
+                    <div className="flex items-center gap-1.5">
+                      <span 
+                        className="text-[9px] px-1.5 py-0.5 rounded-full font-semibold leading-none border"
+                        style={{ backgroundColor: `${cat.color}15`, color: cat.color, borderColor: `${cat.color}25` }}
+                      >
+                        {catWorkspaces.length}
+                      </span>
+                      <ChevronRight className={`w-3 h-3 text-gray-400 transition-transform duration-200 ${isExpanded ? "rotate-90" : ""}`} />
+                    </div>
+                  </button>
+
+                  {/* Nested expanded container space for creating/managing subcategories */}
+                  {isExpanded && (
+                    <div className="pl-4 pr-2 py-2 mt-0.5 mb-1.5 border-t border-dashed border-gray-100/60 space-y-2.5 bg-[#f5f8f6]/50">
+                      <div className="text-[9px] text-gray-400 font-bold uppercase tracking-wider flex items-center justify-between select-none">
+                        <span>Subcategorias</span>
+                        <span className="text-[8px] text-brand-650 normal-case bg-green-50 px-1 py-0.5 rounded">Criativa</span>
+                      </div>
+
+                      {/* List of custom subcategories */}
+                      {subcats.length === 0 ? (
+                        <div className="text-[10px] text-gray-400 italic py-1 pl-1">
+                          Nenhuma subcategoria ainda. Crie uma abaixo!
+                        </div>
+                      ) : (
+                        <div className="space-y-1">
+                          {subcats.map((sub) => (
+                            <div key={sub.id} className="flex items-center justify-between text-xs py-0.5 group/sub bg-white border border-gray-100/40 rounded px-2 hover:bg-[#eaf3ee]/30">
+                              <span className="text-gray-650 font-medium truncate flex items-center gap-1.5 select-all">
+                                <span className="w-1 h-1 rounded-full bg-brand-500" />
+                                <span className="truncate">{sub.name}</span>
+                              </span>
+                              <button
+                                type="button"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  const updated = categoriesList.map(c => {
+                                    if (c.id === cat.id) {
+                                      return {
+                                        ...c,
+                                        subcategories: subcats.filter(s => s.id !== sub.id)
+                                      };
+                                    }
+                                    return c;
+                                  });
+                                  onUpdateCategories(updated);
+                                }}
+                                className="opacity-0 group-hover/sub:opacity-100 p-0.5 text-gray-400 hover:text-red-500 rounded hover:bg-red-50 transition-all cursor-pointer"
+                                title="Excluir subcategoria"
+                              >
+                                <Trash2 className="w-3 h-3" />
+                              </button>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+
+                      {/* Small form to create a subcategory inline inside category view */}
+                      <form 
+                        onSubmit={(e) => {
+                          e.preventDefault();
+                          if (!newSubcatName.trim()) return;
+
+                          const freshSub = {
+                            id: `sub-${Math.random().toString(36).substring(2, 6)}`,
+                            name: newSubcatName.trim()
+                          };
+
+                          const updated = categoriesList.map(c => {
+                            if (c.id === cat.id) {
+                              const existing = c.subcategories || [];
+                              return {
+                                ...c,
+                                subcategories: [...existing, freshSub]
+                              };
+                            }
+                            return c;
+                          });
+
+                          onUpdateCategories(updated);
+                          setNewSubcatName("");
+                        }}
+                        className="flex items-center gap-1.5 bg-white p-1 rounded-lg border border-gray-150"
+                      >
+                        <input
+                          type="text"
+                          value={newSubcatName}
+                          onChange={(e) => setNewSubcatName(e.target.value)}
+                          placeholder="Nova subcategoria..."
+                          className="flex-1 text-[10px] text-gray-800 bg-transparent outline-none px-1 border-none font-sans"
+                        />
+                        <button
+                          type="submit"
+                          className="bg-brand-600 hover:bg-brand-700 text-white rounded px-2 py-0.5 text-[9px] font-bold cursor-pointer transition-colors"
+                        >
+                          Adicionar
+                        </button>
+                      </form>
+                    </div>
+                  )}
+                </div>
+              );
+            })}
           </div>
           
           {/* Button to quickly trigger Settings -> Categories tab */}

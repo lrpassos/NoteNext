@@ -204,11 +204,7 @@ export default function BlockEditor({
             <span>Caderno Inteligente</span>
           </button>
         </div>
-        <div className="flex items-center gap-2">
-          <span className="text-[10px] text-gray-450 font-semibold bg-white border border-gray-200 px-2.5 py-1 rounded-xl">
-            Modo Edição Notion-style
-          </span>
-        </div>
+
       </div>
 
       {/* Actual Notion Editor Canvas Area */}
