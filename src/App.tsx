@@ -33,6 +33,7 @@ import CanvasWorkspace from "./components/CanvasWorkspace";
 import KeepWorkspace from "./components/KeepWorkspace";
 import SaaSConfigPanel from "./components/SaaSConfigPanel";
 import SmartNotebook from "./components/SmartNotebook";
+import AgentChatWidget from "./components/AgentChatWidget";
 
 // Elegant preset documents on first launch to showcase startup design flavor
 const INITIAL_DEMO_ITEMS: WorkspaceItem[] = [
@@ -1039,6 +1040,9 @@ export default function App() {
           }}
         />
       )}
+
+      {/* AgentChatWidget Floating Chat Interface */}
+      <AgentChatWidget agents={agents} />
 
     </div>
   );
