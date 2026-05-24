@@ -98,6 +98,8 @@ export interface WorkspaceItem {
   connections?: CanvasConnection[]; // Milanote connections
   notes?: KeepNote[]; // Keep notes list
   notebookPages?: NotebookPage[]; // Smart notebook pages embedded in this workspace
+  isInTrash?: boolean; // deleted soft-delete flag
+  deletedAt?: string; // date timestamp when sent to trash
 }
 
 export interface UserSession {

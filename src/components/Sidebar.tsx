@@ -48,6 +48,11 @@ interface SidebarProps {
   onUpdateCategories: (cats: WorkspaceCategory[]) => void;
   onSelectSubcategory?: (subName: string, parentCatName: string) => void;
   onSelectNotebookPagesHub?: () => void;
+  onDeleteCategory?: (id: string) => void;
+  onRestoreItem?: (id: string) => void;
+  onPermanentDeleteItem?: (id: string) => void;
+  onEmptyTrash?: () => void;
+  onOpenNotebook?: () => void;
 }
 
 export default function Sidebar({
@@ -68,7 +73,12 @@ export default function Sidebar({
   onDeleteItem,
   onUpdateCategories,
   onSelectSubcategory,
-  onSelectNotebookPagesHub
+  onSelectNotebookPagesHub,
+  onDeleteCategory,
+  onRestoreItem,
+  onPermanentDeleteItem,
+  onEmptyTrash,
+  onOpenNotebook
 }: SidebarProps) {
   const [showAddMenu, setShowAddMenu] = useState(false);
   const [searchVal, setSearchVal] = useState("");
@@ -323,20 +333,24 @@ export default function Sidebar({
           ];
         }, []);
 
-        if (allNotebookPages.length === 0) return null;
-
         return (
           <div className="px-3 pb-2 pt-1">
             <button
-              onClick={() => onSelectNotebookPagesHub?.()}
+              onClick={() => {
+                if (onOpenNotebook) {
+                  onOpenNotebook();
+                } else if (onSelectNotebookPagesHub) {
+                  onSelectNotebookPagesHub();
+                }
+              }}
               className="w-full py-2 bg-emerald-50 hover:bg-emerald-100 border border-emerald-200 hover:border-emerald-300 text-emerald-850 font-bold text-xs rounded-lg transition-all shadow-3xs flex items-center justify-between px-3 cursor-pointer"
-              title="Ver todas as folhas do Caderno Inteligente"
+              title="Abrir o Caderno Inteligente e Ver Notas"
             >
               <span className="flex items-center gap-1.5">
                 <BookOpen className="w-3.5 h-3.5 text-emerald-650 animate-pulse" />
                 <span>Caderno Inteligente</span>
               </span>
-              <span className="bg-emerald-650 text-white text-[10px] px-2 py-0.5 rounded-full font-bold leading-none">
+              <span className="bg-[#054d3d] text-emerald-50 text-[10px] px-2 py-0.5 rounded-full font-bold leading-none">
                 {allNotebookPages.length} {allNotebookPages.length === 1 ? "folha" : "folhas"}
               </span>
             </button>
@@ -355,98 +369,193 @@ export default function Sidebar({
             {/* Standard "Todos" Category Filter */}
             <button
               onClick={() => onSelectCategory("Todos")}
-              className={`w-full px-3 py-1 flex items-center justify-between text-left text-xs rounded-lg transition-all ${
+              className={`w-full px-3 py-2 flex items-center justify-between text-left text-xs rounded-lg transition-all ${
                 activeCategory === "Todos"
-                  ? "bg-brand-50 text-brand-850 font-bold"
+                  ? "bg-brand-50 text-brand-850 font-bold border border-brand-100"
                   : "text-gray-650 hover:bg-gray-50/70"
               }`}
             >
               <span className="flex items-center gap-2">
-                <Tag className="w-3.5 h-3.5 text-brand-655" />
-                <span>Todos os Workspaces</span>
+                <Tag className="w-3.5 h-3.5 text-brand-600" />
+                <span>Exibir Todos</span>
               </span>
               <span className="text-[9px] bg-gray-100 text-gray-550 px-1.5 py-0.5 rounded-full border border-gray-200 font-bold leading-none">
-                {items.length}
+                {items.filter(it => !it.isInTrash).length}
               </span>
             </button>
-
+ 
             {/* Dynamic Configured Colored Categories */}
             {categoriesList.map((cat) => {
               const isExpanded = expandedCatId === cat.id;
               const catWorkspaces = items.filter(
-                (i) => i.category.toLowerCase() === cat.name.toLowerCase()
+                (i) => !i.isInTrash && i.category.toLowerCase() === cat.name.toLowerCase()
               );
-
+ 
               return (
                 <div key={cat.id} className="my-1 rounded-lg overflow-hidden border border-gray-150/20 bg-gray-50/10">
-                  <button
-                    type="button"
-                    onClick={() => {
-                      onSelectCategory(cat.name);
-                      setExpandedCatId(isExpanded ? null : cat.id);
-                    }}
-                    className={`w-full px-3 py-2 flex items-center justify-between text-left text-xs rounded-lg transition-all cursor-pointer ${
-                      activeCategory.toLowerCase() === cat.name.toLowerCase()
-                        ? "bg-brand-50/60 text-brand-900 font-bold border border-brand-100"
-                        : "text-gray-650 hover:bg-gray-50/70"
-                    }`}
-                  >
-                    <span className="flex items-center gap-2 truncate">
+                  <div className="w-full flex items-center justify-between pr-2 hover:bg-gray-50/70 rounded-lg group">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        onSelectCategory(cat.name);
+                        setExpandedCatId(isExpanded ? null : cat.id);
+                      }}
+                      className={`flex-1 px-3 py-2 flex items-center gap-2 text-left text-xs rounded-lg transition-all cursor-pointer ${
+                        activeCategory.toLowerCase() === cat.name.toLowerCase()
+                          ? "text-brand-900 font-bold"
+                          : "text-gray-650"
+                      }`}
+                    >
                       <span 
                         className="w-2.5 h-2.5 rounded-full flex-shrink-0" 
                         style={{ backgroundColor: cat.color }}
                       />
                       <span className="truncate">{cat.name}</span>
-                    </span>
-                    <div className="flex items-center gap-1.5">
+                    </button>
+                    
+                    <div className="flex items-center gap-1" onClick={(e) => e.stopPropagation()}>
+                      <button
+                        type="button"
+                        onClick={() => onDeleteCategory?.(cat.id)}
+                        className="p-1 text-gray-400 hover:text-red-500 rounded bg-transparent hover:bg-red-50 transition-all cursor-pointer opacity-0 group-hover:opacity-100"
+                        title="Excluir Categoria"
+                      >
+                        <Trash2 className="w-3 h-3" />
+                      </button>
                       <span 
                         className="text-[9px] px-1.5 py-0.5 rounded-full font-semibold leading-none border"
                         style={{ backgroundColor: `${cat.color}15`, color: cat.color, borderColor: `${cat.color}25` }}
                       >
                         {catWorkspaces.length}
                       </span>
-                      <ChevronRight className={`w-3 h-3 text-gray-400 transition-transform duration-200 ${isExpanded ? "rotate-90" : ""}`} />
+                      <ChevronRight 
+                        onClick={() => setExpandedCatId(isExpanded ? null : cat.id)}
+                        className={`w-3 h-3 text-gray-400 transition-transform duration-200 cursor-pointer ${isExpanded ? "rotate-90" : ""}`} 
+                      />
                     </div>
-                  </button>
-
-                  {/* Nested expanded container space for listing workspaces under their category */}
+                  </div>
+ 
+                  {/* Nested expanded container space for creation of subcategories and view */}
                   {isExpanded && (
-                    <div className="pl-3 pr-2 py-1.5 border-t border-dashed border-gray-100/60 space-y-1 bg-[#f5f8f6]/50">
-                      {catWorkspaces.length === 0 ? (
-                        <div className="text-[10px] text-gray-400 italic py-1 pl-1">
-                          Nenhum documento nesta categoria.
-                        </div>
-                      ) : (
-                        catWorkspaces.map((item) => (
-                          <button
-                            key={item.id}
-                            onClick={() => onSelectItem(item.id)}
-                            className={`w-full px-2 py-1 flex items-center justify-between text-xs rounded transition-all select-none ${
-                              activeItemId === item.id
-                                ? "bg-white text-brand-900 border-l-2 border-brand-600 font-bold shadow-3xs"
-                                : "text-gray-650 hover:bg-white/60"
-                            }`}
-                          >
-                            <span className="flex items-center gap-1.5 truncate py-0.5">
-                              {getIconForType(item.type)}
-                              <span className="truncate text-[11px] font-medium leading-none">{item.title}</span>
-                            </span>
-                            <button
-                              type="button"
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                if (confirm(`Deseja excluir o documento "${item.title}"?`)) {
-                                  onDeleteItem(item.id);
-                                }
+                    <div className="pl-3 pr-2 py-1.5 border-t border-dashed border-gray-100/60 space-y-1.5 bg-[#f5f8f6]/50">
+                      {/* Subcategory form */}
+                      <form
+                        onSubmit={(e) => {
+                          e.preventDefault();
+                          const input = e.currentTarget.elements.namedItem("subName") as HTMLInputElement;
+                          const val = input.value.trim();
+                          if (!val) return;
+                          
+                          const freshSub = {
+                            id: `sub-${Math.random().toString(36).substring(2, 6)}`,
+                            name: val
+                          };
+                          
+                          const updated = categoriesList.map(c => {
+                            if (c.id === cat.id) {
+                              return {
+                                ...c,
+                                subcategories: [...(c.subcategories || []), freshSub]
+                              };
+                            }
+                            return c;
+                          });
+                          onUpdateCategories(updated);
+                          input.value = "";
+                        }}
+                        className="flex items-center gap-1 bg-white p-1 rounded-md border border-gray-200/60"
+                      >
+                        <input
+                          type="text"
+                          name="subName"
+                          placeholder="Nova sub..."
+                          className="flex-1 text-[10px] bg-transparent outline-none px-1 border-none font-sans"
+                        />
+                        <button
+                          type="submit"
+                          className="bg-brand-600 hover:bg-brand-700 text-white rounded px-2 py-0.5 text-[9px] font-bold cursor-pointer transition-colors"
+                        >
+                          Criar
+                        </button>
+                      </form>
+
+                      {/* Display subcategories created */}
+                      {cat.subcategories && cat.subcategories.length > 0 && (
+                        <div className="flex flex-wrap gap-1 py-1">
+                          {cat.subcategories.map(sub => (
+                            <span 
+                              key={sub.id} 
+                              onClick={() => {
+                                onSelectCategory(cat.name);
+                                onSelectSubcategory?.(sub.name, cat.name);
                               }}
-                              className="px-1 text-gray-400 hover:text-red-500 rounded bg-transparent hover:bg-red-50 transition-all cursor-pointer"
-                              title="Excluir documento"
+                              className="text-[9px] bg-brand-50 hover:bg-brand-100 text-brand-850 font-bold px-1.5 py-0.5 rounded cursor-pointer border border-brand-100/50 flex items-center gap-1 transition-all"
                             >
-                              <Trash2 className="w-2.5 h-2.5" />
-                            </button>
-                          </button>
-                        ))
+                              <span>{sub.name}</span>
+                              <span
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  if (confirm(`Excluir a subcategoria "${sub.name}"?`)) {
+                                    const updated = categoriesList.map(c => {
+                                      if (c.id === cat.id) {
+                                        return {
+                                          ...c,
+                                          subcategories: (c.subcategories || []).filter(s => s.id !== sub.id)
+                                        };
+                                      }
+                                      return c;
+                                    });
+                                    onUpdateCategories(updated);
+                                  }
+                                }}
+                                className="text-gray-400 hover:text-red-650 font-extrabold text-[10px] pl-0.5"
+                                title="Remover subcategoria"
+                              >
+                                ×
+                              </span>
+                            </span>
+                          ))}
+                        </div>
                       )}
+ 
+                      {/* Document List in expanded category */}
+                      <div className="pt-1.5 border-t border-gray-100/50 space-y-1">
+                        {catWorkspaces.length === 0 ? (
+                          <div className="text-[10px] text-gray-400 italic py-1 pl-1">
+                            Sem documentos vinculados.
+                          </div>
+                        ) : (
+                          catWorkspaces.map((item) => (
+                            <button
+                              key={item.id}
+                              onClick={() => onSelectItem(item.id)}
+                              className={`w-full px-2 py-1 flex items-center justify-between text-xs rounded transition-all select-none ${
+                                activeItemId === item.id
+                                  ? "bg-white text-brand-900 border-l-2 border-brand-600 font-bold shadow-3xs"
+                                  : "text-gray-650 hover:bg-white/60"
+                              }`}
+                            >
+                              <span className="flex items-center gap-1.5 truncate py-0.5">
+                                {getIconForType(item.type)}
+                                <span className="truncate text-[11px] font-medium leading-none">{item.title}</span>
+                              </span>
+                              <button
+                                type="button"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  if (confirm(`Deseja enviar o documento "${item.title}" para a Lixeira?`)) {
+                                    onDeleteItem(item.id);
+                                  }
+                                }}
+                                className="px-1 text-gray-400 hover:text-red-500 rounded bg-transparent hover:bg-red-50 transition-all cursor-pointer"
+                                title="Enviar para Lixeira"
+                              >
+                                <Trash2 className="w-2.5 h-2.5" />
+                              </button>
+                            </button>
+                          ))
+                        )}
+                      </div>
                     </div>
                   )}
                 </div>
@@ -463,6 +572,126 @@ export default function Sidebar({
             <span>Adicionar Categoria</span>
           </button>
         </div>
+
+        {/* Todos os Workspaces Complete List */}
+        <div>
+          <span className="px-3 text-[10px] font-bold text-gray-400 uppercase tracking-wider block mb-1.5">
+            Todos os Workspaces
+          </span>
+          <div className="space-y-0.5 max-h-56 overflow-y-auto pr-1">
+            {items.filter(it => !it.isInTrash).length === 0 ? (
+              <span className="px-3 text-[11px] text-gray-400 italic block">
+                Nenhum workspace ativo.
+              </span>
+            ) : (
+              items.filter(it => !it.isInTrash).map((item) => (
+                <button
+                  key={item.id}
+                  onClick={() => onSelectItem(item.id)}
+                  className={`w-full px-3 py-1.5 text-left text-xs rounded-lg flex items-center justify-between group transition-all ${
+                    activeItemId === item.id
+                      ? "bg-emerald-50 text-brand-900 border-l-2 border-brand-500 font-bold"
+                      : "text-gray-650 hover:bg-gray-50/60"
+                  }`}
+                >
+                  <div className="flex items-center gap-2 truncate flex-1">
+                    {getIconForType(item.type)}
+                    <span className="truncate text-[11.5px] font-medium">{item.title}</span>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      if (confirm(`Deseja enviar o documento "${item.title}" para a Lixeira?`)) {
+                        onDeleteItem(item.id);
+                      }
+                    }}
+                    className="opacity-0 group-hover:opacity-100 px-1 text-gray-400 hover:text-red-500 rounded bg-transparent hover:bg-red-50 transition-all cursor-pointer"
+                    title="Enviar para Lixeira"
+                  >
+                    <Trash2 className="w-2.5 h-2.5" />
+                  </button>
+                </button>
+              ))
+            )}
+          </div>
+        </div>
+
+        {/* Lixeira (Recycle Bin Section with 30-day calculation rule) */}
+        {(() => {
+          const trashItems = items.filter(it => it.isInTrash);
+          if (trashItems.length === 0) return null;
+
+          return (
+            <div className="border border-red-100 bg-red-50/10 rounded-xl p-2.5 mt-2 space-y-1.5">
+              <div className="flex items-center justify-between">
+                <span className="text-[10px] font-bold text-red-800 uppercase tracking-wider flex items-center gap-1">
+                  <Trash2 className="w-3.5 h-3.5 text-red-650" />
+                  <span>Lixeira</span>
+                </span>
+                <button
+                  onClick={() => {
+                    if (confirm("Tem certeza que deseja esvaziar a lixeira permanentemente?")) {
+                      onEmptyTrash?.();
+                    }
+                  }}
+                  className="text-[9px] text-red-650 font-bold hover:underline"
+                >
+                  Esvaziar
+                </button>
+              </div>
+              <span className="text-[8.5px] text-gray-400 block leading-tight">
+                Excluído permanentemente após 30 dias.
+              </span>
+              
+              <div className="space-y-1 pt-1 max-h-40 overflow-y-auto pr-1">
+                {trashItems.map((item) => {
+                  const daysLeft = (() => {
+                    if (!item.deletedAt) return 30;
+                    const diffTime = Date.now() - new Date(item.deletedAt).getTime();
+                    const diffDays = Math.floor(diffTime / (1000 * 60 * 60 * 24));
+                    return Math.max(0, 30 - diffDays);
+                  })();
+
+                  return (
+                    <div 
+                      key={item.id} 
+                      className="bg-white border border-red-50/50 rounded p-1.5 flex flex-col gap-1"
+                    >
+                      <div className="flex items-center justify-between gap-1">
+                        <span className="text-[10px] font-semibold text-gray-800 truncate" title={item.title}>
+                          {item.title}
+                        </span>
+                        <span className="text-[8px] font-mono text-gray-400 flex-shrink-0">{daysLeft}d restando</span>
+                      </div>
+                      
+                      <div className="flex items-center justify-between border-t border-red-50/30 pt-1">
+                        <button
+                          type="button"
+                          onClick={() => onRestoreItem?.(item.id)}
+                          className="text-[8.5px] text-emerald-700 font-semibold hover:underline"
+                        >
+                          Restaurar
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            if (confirm(`Excluir permanentemente o documento "${item.title}"?`)) {
+                              onPermanentDeleteItem?.(item.id);
+                            }
+                          }}
+                          className="text-[8.5px] text-red-600 font-semibold hover:underline"
+                        >
+                          Eliminar
+                        </button>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          );
+        })()}
 
         {/* Favorite Starred Items */}
         {items.some(i => i.isFavorite) && (

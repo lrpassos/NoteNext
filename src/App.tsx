@@ -181,10 +181,27 @@ export default function App() {
 
     const savedItems = localStorage.getItem("notenext_items") || localStorage.getItem("veridian_items");
     if (savedItems) {
-      const parsed = JSON.parse(savedItems);
+      let parsed = JSON.parse(savedItems);
+      // Clean up items in trash that are older than 30 days
+      const now = Date.now();
+      const thirtyDaysMs = 30 * 24 * 60 * 65 * 1000; // 30 days
+      const activeLength = parsed.length;
+      parsed = parsed.filter((it: any) => {
+        if (it.isInTrash && it.deletedAt) {
+          const deleteTime = new Date(it.deletedAt).getTime();
+          if (now - deleteTime >= thirtyDaysMs) {
+            return false;
+          }
+        }
+        return true;
+      });
+      if (parsed.length !== activeLength) {
+        localStorage.setItem("notenext_items", JSON.stringify(parsed));
+      }
       setItems(parsed);
-      if (parsed.length > 0) {
-        setActiveItemId(parsed[0].id);
+      const activeList = parsed.filter((it: any) => !it.isInTrash);
+      if (activeList.length > 0) {
+        setActiveItemId(activeList[0].id);
       }
     } else {
       setItems(INITIAL_DEMO_ITEMS);
@@ -302,12 +319,89 @@ export default function App() {
   };
 
   const deleteCurrentWorkspace = (itemId: string) => {
+    handleMoveToTrash(itemId);
+  };
+
+  const handleMoveToTrash = (itemId: string) => {
+    const updated = items.map(it => {
+      if (it.id === itemId) {
+        return {
+          ...it,
+          isInTrash: true,
+          deletedAt: new Date().toISOString()
+        };
+      }
+      return it;
+    });
+    saveItems(updated);
+    
+    // Select alternative active workspace if the current one has gone to the trash
+    if (activeItemId === itemId) {
+      const remainingActive = updated.filter(it => !it.isInTrash);
+      if (remainingActive.length > 0) {
+        setActiveItemId(remainingActive[0].id);
+      } else {
+        setActiveItemId(null);
+      }
+    }
+  };
+
+  const handleRestoreFromTrash = (itemId: string) => {
+    const updated = items.map(it => {
+      if (it.id === itemId) {
+        return {
+          ...it,
+          isInTrash: false,
+          deletedAt: undefined
+        };
+      }
+      return it;
+    });
+    saveItems(updated);
+    setActiveItemId(itemId);
+    setViewType("workspace");
+  };
+
+  const handlePermanentDelete = (itemId: string) => {
     const updated = items.filter(it => it.id !== itemId);
     saveItems(updated);
-    if (updated.length > 0) {
-      setActiveItemId(updated[0].id);
-    } else {
-      setActiveItemId(null);
+    if (activeItemId === itemId) {
+      const remainingActive = updated.filter(it => !it.isInTrash);
+      if (remainingActive.length > 0) {
+        setActiveItemId(remainingActive[0].id);
+      } else {
+        setActiveItemId(null);
+      }
+    }
+  };
+
+  const handleEmptyTrash = () => {
+    const updated = items.filter(it => !it.isInTrash);
+    saveItems(updated);
+  };
+
+  const handleDeleteCategory = (catId: string) => {
+    const categoryToDelete = categories.find(c => c.id === catId);
+    if (!categoryToDelete) return;
+    
+    if (confirm(`Tem certeza de que gostaria de excluir a categoria "${categoryToDelete.name}"?`)) {
+      const updatedCategories = categories.filter(c => c.id !== catId);
+      setCategories(updatedCategories);
+      localStorage.setItem("notenext_categories", JSON.stringify(updatedCategories));
+      
+      const fallback = updatedCategories.length > 0 ? updatedCategories[0].name : "Pessoal";
+      const updatedWorkspaces = items.map(w => {
+        if (w.category.toLowerCase() === categoryToDelete.name.toLowerCase()) {
+          return { ...w, category: fallback };
+        }
+        return w;
+      });
+      saveItems(updatedWorkspaces);
+      
+      if (activeCategory.toLowerCase() === categoryToDelete.name.toLowerCase()) {
+        setActiveCategory("Todos");
+        setViewType("workspace");
+      }
     }
   };
 
@@ -479,6 +573,7 @@ export default function App() {
 
   // Filter items logic (Search + Categories)
   const filteredItems = items.filter(it => {
+    if (it.isInTrash) return false;
     const matchesSearch = it.title.toLowerCase().includes(searchQuery.toLowerCase());
     const matchesCategory = activeCategory === "Todos" || it.category.toLowerCase() === activeCategory.toLowerCase();
     return matchesSearch && matchesCategory;
@@ -515,6 +610,19 @@ export default function App() {
           onUpdateCategories={setCategories}
           onSelectSubcategory={handleSelectSubcategory}
           onSelectNotebookPagesHub={() => setViewType("notebook-pages-hub")}
+          onDeleteCategory={handleDeleteCategory}
+          onRestoreItem={handleRestoreFromTrash}
+          onPermanentDeleteItem={handlePermanentDelete}
+          onEmptyTrash={handleEmptyTrash}
+          onOpenNotebook={() => {
+            const actives = items.filter(it => !it.isInTrash);
+            if (actives.length === 0) {
+              handleAddItem(WorkspaceType.NOTION_DOC);
+            } else if (!activeItemId || items.find(it => it.id === activeItemId)?.isInTrash) {
+              setActiveItemId(actives[0].id);
+            }
+            setIsNotebookOpen(true);
+          }}
         />
       ) : (
         /* Floating Restore Menu Button on left edge when collapsed */
