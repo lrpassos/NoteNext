@@ -53,6 +53,7 @@ interface SidebarProps {
   onPermanentDeleteItem?: (id: string) => void;
   onEmptyTrash?: () => void;
   onOpenNotebook?: () => void;
+  onSelectTrash?: () => void;
 }
 
 export default function Sidebar({
@@ -78,7 +79,8 @@ export default function Sidebar({
   onRestoreItem,
   onPermanentDeleteItem,
   onEmptyTrash,
-  onOpenNotebook
+  onOpenNotebook,
+  onSelectTrash
 }: SidebarProps) {
   const [showAddMenu, setShowAddMenu] = useState(false);
   const [searchVal, setSearchVal] = useState("");
@@ -165,9 +167,9 @@ export default function Sidebar({
       {/* Top Application Ribbon */}
       <div className="p-4 border-b border-[#eaf2ed] flex flex-col gap-2.5">
         <div className="flex items-center justify-between gap-1">
-          <div className="flex items-center gap-2.5 truncate flex-1">
-            {/* Animated Hand Writing Logo */}
-            <div className="w-9 h-9 rounded-xl bg-gradient-to-tr from-brand-600 to-emerald-500 flex items-center justify-center shadow-lg shadow-brand-600/10 text-white relative overflow-hidden group flex-shrink-0">
+          <div className="flex items-center gap-3 truncate flex-1">
+            {/* Animated Hand Writing Logo (Increased Size) */}
+            <div className="w-11 h-11 rounded-2xl bg-gradient-to-tr from-brand-600 to-emerald-500 flex items-center justify-center shadow-lg shadow-brand-600/10 text-white relative overflow-hidden group flex-shrink-0">
               <motion.div
                 animate={{ 
                   x: [0, 2.5, -1, 3, 0], 
@@ -176,19 +178,19 @@ export default function Sidebar({
                 }}
                 transition={{ repeat: Infinity, duration: 2.8, ease: "easeInOut" }}
               >
-                <svg className="w-5 h-5 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2.5">
+                <svg className="w-6 h-6 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2.5">
                   <path strokeLinecap="round" strokeLinejoin="round" d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" />
                 </svg>
               </motion.div>
-              <div className="absolute bottom-0.5 left-1/2 -translate-x-1/2 w-4.5 h-0.5 bg-emerald-300 rounded-full animate-pulse" />
+              <div className="absolute bottom-1 left-1 text-[7px] text-emerald-300 font-bold" />
             </div>
 
             <div className="truncate">
-              <h2 className="text-sm font-black font-display text-gray-900 tracking-tight leading-none flex items-center gap-1">
+              <h2 className="text-base font-black font-display text-gray-900 tracking-tight leading-none flex items-center gap-1.5">
                 <span>NoteNext</span>
-                <span className="text-[8px] bg-brand-100 text-[#064e3b] font-bold px-1.5 py-0.5 rounded uppercase font-sans tracking-wide">Pro</span>
+                <span className="text-[9px] bg-brand-100 text-[#064e3b] font-extrabold px-1.5 py-0.5 rounded uppercase font-sans tracking-wide">Pro</span>
               </h2>
-              <span className="text-[10px] text-gray-405 mt-1 block truncate leading-none">luiz.rogerios@gmail.com</span>
+              <span className="text-[11px] text-gray-405 mt-1 block truncate leading-none">luiz.rogerios@gmail.com</span>
             </div>
           </div>
 
@@ -616,80 +618,30 @@ export default function Sidebar({
             )}
           </div>
         </div>
-
-        {/* Lixeira (Recycle Bin Section with 30-day calculation rule) */}
+                {/* Lixeira (Recycle Bin Section with 30-day calculation rule) */}
         {(() => {
           const trashItems = items.filter(it => it.isInTrash);
-          if (trashItems.length === 0) return null;
-
           return (
-            <div className="border border-red-100 bg-red-50/10 rounded-xl p-2.5 mt-2 space-y-1.5">
-              <div className="flex items-center justify-between">
-                <span className="text-[10px] font-bold text-red-800 uppercase tracking-wider flex items-center gap-1">
-                  <Trash2 className="w-3.5 h-3.5 text-red-650" />
-                  <span>Lixeira</span>
-                </span>
-                <button
-                  onClick={() => {
-                    if (confirm("Tem certeza que deseja esvaziar a lixeira permanentemente?")) {
-                      onEmptyTrash?.();
-                    }
-                  }}
-                  className="text-[9px] text-red-650 font-bold hover:underline"
-                >
-                  Esvaziar
-                </button>
+            <button
+              onClick={() => onSelectTrash?.()}
+              className="w-full border border-red-100 bg-red-50/10 hover:bg-red-50/30 rounded-xl p-2.5 mt-2 flex items-center justify-between text-left transition-all group cursor-pointer outline-none focus:ring-1 focus:ring-red-200 animate-fade-in"
+              title="Clique para abrir a lixeira em uma nova página"
+            >
+              <div className="flex items-center gap-2">
+                <Trash2 className="w-4 h-4 text-red-650 group-hover:scale-110 duration-150 transition-transform" />
+                <div>
+                  <span className="text-[10px] font-bold text-red-800 uppercase tracking-wider block">
+                    Lixeira
+                  </span>
+                  <span className="text-[9px] text-gray-400 block leading-none mt-0.5">
+                    {trashItems.length} {trashItems.length === 1 ? "excluído" : "excluídos"}
+                  </span>
+                </div>
               </div>
-              <span className="text-[8.5px] text-gray-400 block leading-tight">
-                Excluído permanentemente após 30 dias.
+              <span className="text-[10px] font-bold text-red-650 opacity-65 group-hover:opacity-100 transition-all px-1.5 py-0.5 bg-red-50 rounded">
+                Ver →
               </span>
-              
-              <div className="space-y-1 pt-1 max-h-40 overflow-y-auto pr-1">
-                {trashItems.map((item) => {
-                  const daysLeft = (() => {
-                    if (!item.deletedAt) return 30;
-                    const diffTime = Date.now() - new Date(item.deletedAt).getTime();
-                    const diffDays = Math.floor(diffTime / (1000 * 60 * 60 * 24));
-                    return Math.max(0, 30 - diffDays);
-                  })();
-
-                  return (
-                    <div 
-                      key={item.id} 
-                      className="bg-white border border-red-50/50 rounded p-1.5 flex flex-col gap-1"
-                    >
-                      <div className="flex items-center justify-between gap-1">
-                        <span className="text-[10px] font-semibold text-gray-800 truncate" title={item.title}>
-                          {item.title}
-                        </span>
-                        <span className="text-[8px] font-mono text-gray-400 flex-shrink-0">{daysLeft}d restando</span>
-                      </div>
-                      
-                      <div className="flex items-center justify-between border-t border-red-50/30 pt-1">
-                        <button
-                          type="button"
-                          onClick={() => onRestoreItem?.(item.id)}
-                          className="text-[8.5px] text-emerald-700 font-semibold hover:underline"
-                        >
-                          Restaurar
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => {
-                            if (confirm(`Excluir permanentemente o documento "${item.title}"?`)) {
-                              onPermanentDeleteItem?.(item.id);
-                            }
-                          }}
-                          className="text-[8.5px] text-red-600 font-semibold hover:underline"
-                        >
-                          Eliminar
-                        </button>
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
-            </div>
+            </button>
           );
         })()}
 

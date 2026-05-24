@@ -19,7 +19,8 @@ import {
   ToggleRight,
   Shield,
   Activity,
-  Award
+  Award,
+  Upload
 } from "lucide-react";
 import { WorkspaceCategory, GeminiAgent, WorkspaceItem } from "../types";
 
@@ -57,6 +58,22 @@ export default function SaaSConfigPanel({
   const [agentSystemInstruction, setAgentSystemInstruction] = useState("");
   const [agentModel, setAgentModel] = useState("gemini-3.5-flash");
   const [editingAgentId, setEditingAgentId] = useState<string | null>(null);
+  const [uploadedDocName, setUploadedDocName] = useState<string | undefined>(undefined);
+  const [uploadedDocContent, setUploadedDocContent] = useState<string | undefined>(undefined);
+
+  const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    setUploadedDocName(file.name);
+
+    const reader = new FileReader();
+    reader.onload = (event) => {
+      const text = event.target?.result as string;
+      setUploadedDocContent(text);
+    };
+    reader.readAsText(file);
+  };
 
   const colorsPalette = [
     { value: "#10b981", name: "Esmeralda", text: "text-emerald-700 bg-emerald-50 border-emerald-200" },
@@ -160,7 +177,9 @@ export default function SaaSConfigPanel({
             name: agentName.trim(),
             role: agentRole.trim(),
             systemInstruction: agentSystemInstruction.trim(),
-            model: agentModel
+            model: agentModel,
+            uploadedDocName,
+            uploadedDocContent
           };
         }
         return a;
@@ -176,7 +195,9 @@ export default function SaaSConfigPanel({
         systemInstruction: agentSystemInstruction.trim() || "Você é um agente de IA especialista.",
         model: agentModel,
         isActive: true,
-        status: Math.random() > 0.15 ? "online" : "offline" // High-fidelity simulated online/offline indicator
+        status: "online",
+        uploadedDocName,
+        uploadedDocContent
       };
       onUpdateAgents([...agents, newAgent]);
     }
@@ -185,6 +206,8 @@ export default function SaaSConfigPanel({
     setAgentRole("");
     setAgentSystemInstruction("");
     setAgentModel("gemini-3.5-flash");
+    setUploadedDocName(undefined);
+    setUploadedDocContent(undefined);
   };
 
   const handleStartEditAgent = (agent: GeminiAgent) => {
@@ -193,6 +216,8 @@ export default function SaaSConfigPanel({
     setAgentRole(agent.role);
     setAgentSystemInstruction(agent.systemInstruction);
     setAgentModel(agent.model);
+    setUploadedDocName(agent.uploadedDocName);
+    setUploadedDocContent(agent.uploadedDocContent);
   };
 
   const handleToggleAgentActive = (agentId: string) => {
@@ -455,6 +480,48 @@ export default function SaaSConfigPanel({
                     />
                   </div>
 
+                  {/* Document upload block */}
+                  <div className="space-y-1 p-3 bg-white border border-dashed border-gray-200 rounded-xl">
+                    <label className="text-[10px] font-bold text-gray-500 block">📚 Documento de Referência (Opcional)</label>
+                    <span className="text-[9px] text-gray-400 block pb-1">
+                      Anexe um documento de texto (.txt, .md, .csv, .json) para o agente analisar como conhecimento de referência.
+                    </span>
+                    
+                    <div className="flex items-center gap-2">
+                      <input
+                        type="file"
+                        accept=".txt,.md,.csv,.json,.js,.ts,.html,.css"
+                        onChange={handleFileUpload}
+                        className="hidden"
+                        id="agent-doc-uploader"
+                      />
+                      <label
+                        htmlFor="agent-doc-uploader"
+                        className="bg-brand-50 hover:bg-brand-100 text-brand-850 hover:text-brand-950 font-bold text-[10.5px] py-1.5 px-3 rounded-lg cursor-pointer border border-[#eaf2ed] inline-flex items-center gap-1.5 transition-all text-center"
+                      >
+                        <Upload className="w-3.5 h-3.5" />
+                        <span>{uploadedDocName ? "Substituir" : "Subir Documento"}</span>
+                      </label>
+                      
+                      {uploadedDocName && (
+                        <div className="flex items-center gap-1 bg-emerald-50 border border-emerald-100/50 px-2.5 py-1 rounded text-[10px] text-emerald-800 font-medium truncate max-w-[150px]">
+                          <span className="truncate" title={uploadedDocName}>{uploadedDocName}</span>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setUploadedDocName(undefined);
+                              setUploadedDocContent(undefined);
+                            }}
+                            className="text-emerald-600 hover:text-red-500 font-extrabold pl-1 cursor-pointer"
+                            title="Remover documento"
+                          >
+                            ×
+                          </button>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+
                   <div className="flex items-center gap-2 pt-2">
                     <button
                       type="submit"
@@ -543,6 +610,13 @@ export default function SaaSConfigPanel({
                         <p className="text-[10px] text-gray-600 leading-tight italic line-clamp-2">
                           "{agent.systemInstruction}"
                         </p>
+
+                        {agent.uploadedDocName && (
+                          <div className="flex items-center gap-1 bg-emerald-50 border border-emerald-150/50 px-2 py-1 rounded text-[9px] text-emerald-800 font-bold w-max" title={agent.uploadedDocName}>
+                            <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
+                            <span className="truncate max-w-[120px]">Doc: {agent.uploadedDocName}</span>
+                          </div>
+                        )}
                       </div>
 
                       {/* Footer actions */}

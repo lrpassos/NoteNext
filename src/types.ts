@@ -82,6 +82,8 @@ export interface GeminiAgent {
   isActive: boolean;
   status: "online" | "offline";
   apiKey?: string;
+  uploadedDocName?: string;
+  uploadedDocContent?: string;
 }
 
 export interface WorkspaceItem {

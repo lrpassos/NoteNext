@@ -170,7 +170,7 @@ export default function App() {
   const [isNotebookOpen, setIsNotebookOpen] = useState(false);
   
   // Custom states for hubs and notebook leaf focused navigation
-  const [viewType, setViewType] = useState<"workspace" | "category-hub" | "notebook-pages-hub">("workspace");
+  const [viewType, setViewType] = useState<"workspace" | "category-hub" | "notebook-pages-hub" | "trash">("workspace");
   const [notebookInitialPageId, setNotebookInitialPageId] = useState<string | null>(null);
   
   // Load session & data from localstorage
@@ -422,24 +422,10 @@ export default function App() {
   };
 
   const handleSelectSubcategory = (subName: string, parentCatName: string) => {
-    // De acordo com o pedido, a área estará dentro da categoria Produto
-    const targetCategory = "Produto";
+    // A área de trabalho do workspace pertence à categoria correspondente
+    const targetCategory = parentCatName || "Pessoal";
 
-    // Garante que a categoria "Produto" existe na lista de categorias
-    setCategories(prev => {
-      const hasProd = prev.some(c => c.name.toLowerCase() === targetCategory.toLowerCase());
-      if (!hasProd) {
-        const nextCats = [
-          ...prev,
-          { id: `cat-prod-${Date.now()}`, name: targetCategory, color: "#0ea5e9", order: prev.length }
-        ];
-        localStorage.setItem("notenext_categories", JSON.stringify(nextCats));
-        return nextCats;
-      }
-      return prev;
-    });
-
-    // Procura por um workspace existente com o nome da subcategoria e sob "Produto"
+    // Procura por um workspace existente com o nome da subcategoria e sob a categoria correspondente
     const existing = items.find(
       it => it.title.toLowerCase() === subName.toLowerCase() && it.category.toLowerCase() === targetCategory.toLowerCase()
     );
@@ -488,9 +474,13 @@ export default function App() {
     setIsAiLoading(true);
     try {
       const activeAgent = agents.find(a => a.isActive);
-      const systemInstruction = activeAgent 
+      let systemInstruction = activeAgent 
         ? `${activeAgent.systemInstruction}. Você está atuando no papel de: ${activeAgent.role}.` 
         : "Você é o assistente inteligente NoteNext. Escreva com foco em produtividade, criatividade e de forma premium nos detalhes.";
+
+      if (activeAgent && activeAgent.uploadedDocContent) {
+        systemInstruction += `\n\n[DOCUMENTO DE REFERÊNCIA ANEXADO: ${activeAgent.uploadedDocName}]\n${activeAgent.uploadedDocContent}\n\nPor favor, faça a análise desse documento de referência e use as informações do documento para responder ao usuário de forma precisa.`;
+      }
 
       const response = await fetch("/api/gemini", {
         method: "POST",
@@ -630,6 +620,7 @@ export default function App() {
           onRestoreItem={handleRestoreFromTrash}
           onPermanentDeleteItem={handlePermanentDelete}
           onEmptyTrash={handleEmptyTrash}
+          onSelectTrash={() => setViewType("trash")}
           onOpenNotebook={() => {
             const actives = items.filter(it => !it.isInTrash);
             if (actives.length === 0) {
@@ -786,9 +777,9 @@ export default function App() {
                     return (
                       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5">
                         {subcats.map((sub) => {
-                          // Find any existing workspaces connected to this subcategory
+                          // Find any existing workspaces connected to this subcategory under active category
                           const countWorkspaces = items.filter(
-                            it => it.title.trim().toLowerCase() === sub.name.trim().toLowerCase() && it.category === "Produto"
+                            it => it.title.trim().toLowerCase() === sub.name.trim().toLowerCase() && it.category.toLowerCase() === activeCategory.toLowerCase()
                           ).length;
 
                           return (
@@ -830,7 +821,7 @@ export default function App() {
                                   {sub.name}
                                 </h4>
                                 <span className="text-[10px] text-gray-400 block pb-3">
-                                  {countWorkspaces > 0 ? `✓ Vinculada a ${countWorkspaces} área sob Produto` : "Ainda sem documento ativo"}
+                                  {countWorkspaces > 0 ? `✓ Vinculada a ${countWorkspaces} área sob ${activeCategory}` : "Ainda sem documento ativo"}
                                 </span>
                               </div>
 
@@ -952,6 +943,132 @@ export default function App() {
                 </div>
               </div>
             </motion.div>
+          ) : viewType === "trash" ? (
+            <motion.div
+              key="trash-hub"
+              initial={{ opacity: 0, y: 15 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -15 }}
+              transition={{ duration: 0.2 }}
+              className="flex-1 overflow-y-auto bg-[#fafcfb] p-8 lg:p-14 font-sans"
+            >
+              <div className="max-w-4xl mx-auto space-y-8">
+                {/* Header card with actions */}
+                <div className="p-6 bg-white border border-red-100 rounded-2xl shadow-3xs flex flex-col sm:flex-row items-center justify-between gap-6 bg-gradient-to-r from-red-50/10 to-white">
+                  <div className="space-y-1 text-left">
+                    <div className="flex items-center gap-2">
+                      <Trash2 className="w-5 h-5 text-red-650" />
+                      <h2 className="text-xl font-extrabold font-display text-gray-900">
+                        Gerenciamento da Lixeira
+                      </h2>
+                    </div>
+                    <p className="text-xs text-gray-400">
+                      Consulte e gerencie workspaces deletados temporariamente. Os documentos nesta lixeira são excluídos permanentemente após <span className="font-semibold text-red-750 font-mono">30 dias</span>.
+                    </p>
+                  </div>
+
+                  <div className="flex items-center gap-2.5">
+                    {items.some(it => it.isInTrash) && (
+                      <button
+                        onClick={() => {
+                          if (confirm("Tem certeza que deseja esvaziar a lixeira permanentemente?")) {
+                            handleEmptyTrash();
+                          }
+                        }}
+                        className="bg-red-50 hover:bg-red-100 text-red-700 font-bold text-xs py-2 px-4 rounded-xl shadow-xs transition-all cursor-pointer border border-red-100"
+                      >
+                        Esvaziar Lixeira
+                      </button>
+                    )}
+                    <button
+                      onClick={() => {
+                        const actives = items.filter(it => !it.isInTrash);
+                        if (actives.length > 0) {
+                          setActiveItemId(actives[0].id);
+                          setViewType("workspace");
+                        } else {
+                          setViewType("workspace");
+                        }
+                      }}
+                      className="bg-gray-100 hover:bg-gray-200 text-gray-700 font-bold text-xs py-2 px-4 rounded-xl transition-all cursor-pointer"
+                    >
+                      Voltar para Área
+                    </button>
+                  </div>
+                </div>
+
+                {/* Excluded items list */}
+                <div className="space-y-4">
+                  <h3 className="text-xs font-bold text-gray-400 uppercase tracking-widest text-left">
+                    Documentos Excluídos ({items.filter(it => it.isInTrash).length})
+                  </h3>
+
+                  {items.filter(it => it.isInTrash).length === 0 ? (
+                    <div className="text-center py-16 text-gray-400 italic bg-white border border-dashed border-gray-250 rounded-3xl space-y-3">
+                      <Trash2 className="w-12 h-12 text-gray-300 mx-auto" />
+                      <p>Sua lixeira está vazia e limpa!</p>
+                      <p className="text-[10px] text-gray-400">Atividades e documentos que você excluir aparecerão aqui.</p>
+                    </div>
+                  ) : (
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-5 text-left">
+                      {items.filter(it => it.isInTrash).map((item) => {
+                        const daysLeft = (() => {
+                          if (!item.deletedAt) return 30;
+                          const diffTime = Date.now() - new Date(item.deletedAt).getTime();
+                          const diffDays = Math.floor(diffTime / (1000 * 60 * 60 * 24));
+                          return Math.max(0, 30 - diffDays);
+                        })();
+
+                        return (
+                          <div
+                            key={item.id}
+                            className="bg-white border border-gray-200 rounded-2xl p-5 hover:shadow-xs transition-all flex flex-col justify-between min-h-[150px] space-y-3"
+                          >
+                            <div className="space-y-1.5">
+                              <div className="flex items-center justify-between">
+                                <span className="text-[9.5px] font-extrabold uppercase px-2 py-0.5 rounded bg-gray-100 text-gray-500 border border-gray-200">
+                                  {item.type === WorkspaceType.NOTION_DOC ? "📑 Notion Doc" : item.type === WorkspaceType.MILANOTE_CANVAS ? "🎨 Milanote Canvas" : "📝 Keep Notes"}
+                                </span>
+                                <span className="text-[9.5px] text-red-650 font-bold bg-red-50 px-2 py-0.5 rounded border border-red-150/40 font-mono">
+                                  {daysLeft}d restando
+                                </span>
+                              </div>
+
+                              <h4 className="font-extrabold text-gray-800 text-base leading-tight">
+                                {item.title || "Sem título"}
+                              </h4>
+                              
+                              <p className="text-[10px] text-gray-450 leading-none">
+                                Categoria: <span className="font-medium text-gray-650">{item.category}</span>
+                              </p>
+                            </div>
+
+                            <div className="pt-3 border-t border-gray-100 flex items-center justify-between">
+                              <button
+                                onClick={() => handleRestoreFromTrash(item.id)}
+                                className="text-emerald-700 hover:text-emerald-900 text-xs font-bold transition-colors cursor-pointer"
+                              >
+                                Restaurar
+                              </button>
+                              <button
+                                onClick={() => {
+                                  if (confirm(`Tem certeza de que deseja apagar permanentemente o documento "${item.title}"?`)) {
+                                    handlePermanentDelete(item.id);
+                                  }
+                                }}
+                                className="text-red-655 hover:text-red-850 text-xs font-bold transition-colors cursor-pointer"
+                              >
+                                Eliminar definitivo
+                              </button>
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )}
+                </div>
+              </div>
+            </motion.div>
           ) : !currentItem ? (
             <motion.div 
               key="empty"
@@ -1037,9 +1154,14 @@ export default function App() {
           onTriggerAi={async (prompt) => {
             try {
               const activeAgent = agents.find(a => a.isActive);
-              const systemInstruction = activeAgent 
+              let systemInstruction = activeAgent 
                 ? `${activeAgent.systemInstruction}. Você está atuando no papel de: ${activeAgent.role}.` 
                 : "Você é o assistente inteligente NoteNext. Responda em formato de notas organizadas.";
+
+              if (activeAgent && activeAgent.uploadedDocContent) {
+                systemInstruction += `\n\n[DOCUMENTO DE REFERÊNCIA ANEXADO: ${activeAgent.uploadedDocName}]\n${activeAgent.uploadedDocContent}\n\nPor favor, faça a análise desse documento de referência e use as informações do documento para responder ao usuário de forma precisa.`;
+              }
+
               const response = await fetch("/api/gemini", {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
@@ -1057,9 +1179,6 @@ export default function App() {
           }}
         />
       )}
-
-      {/* AgentChatWidget Floating Chat Interface */}
-      <AgentChatWidget agents={agents} />
 
     </div>
   );
