@@ -110,6 +110,7 @@ export interface UserSession {
   isAuthenticated: boolean;
   loginMethod: "credentials" | "phone" | "google" | "github" | "microsoft";
   mfaEnabled: boolean;
+  token?: string;
   tenantId?: string;
   idToken?: string;
   accessToken?: string;

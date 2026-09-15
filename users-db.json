@@ -1,0 +1,20 @@
+[
+  {
+    "id": "usr_initial_admin",
+    "email": "admin@notenext.sh",
+    "password": "password123",
+    "name": "Administrador",
+    "mfa_enabled": false,
+    "created_at": "2026-09-15T01:19:29.927Z"
+  },
+  {
+    "id": "usr_090125c73c56",
+    "email": "luiz.rogerios@gmail.com",
+    "password": "MinhaSenhaForte2026!",
+    "name": "Luiz Rogério",
+    "mfa_enabled": true,
+    "created_at": "2026-09-15T01:19:29.927Z",
+    "mfa_secret": "ZVPHTZATDCTZKBPMPDH7DQHMA6L3CTTR",
+    "updated_at": "2026-09-15T01:19:47.395Z"
+  }
+]

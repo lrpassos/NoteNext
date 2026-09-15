@@ -79,23 +79,9 @@ export function accountToUserSession(
  */
 export async function loginWithMicrosoft(): Promise<UserSession> {
   if (!isMsalConfigured) {
-    console.info("[MSAL] Modo simulação ativo pois VITE_AZURE_CLIENT_ID não foi definido no .env.");
-    // Sessão simulada com credenciais corporativas do Entra ID
-    const demoSession: UserSession = {
-      email: "colaborador@corporativo.microsoft.com",
-      name: "Alexandre Rocha",
-      username: "colaborador@corporativo.microsoft.com",
-      isAuthenticated: true,
-      loginMethod: "microsoft",
-      mfaEnabled: true,
-      tenantId: "8f76e2d1-9b04-4c55-b823-14902194f1ba",
-      idToken: "demo-jwt-id-token-microsoft-authenticator-verified",
-      accessToken: "demo-bearer-token-graph-api-user-read",
-      jobTitle: "Cloud Solutions Architect",
-      roles: ["Global Reader", "Workspace Contributor"],
-    };
-    localStorage.setItem("notenext_session", JSON.stringify(demoSession));
-    return demoSession;
+    throw new Error(
+      "Microsoft Entra ID não configurado no ambiente. Configure VITE_AZURE_CLIENT_ID para autenticação corporativa ou acesse com e-mail e senha com 2FA."
+    );
   }
 
   const instance = await getMsalInstance();

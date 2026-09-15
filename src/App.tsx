@@ -174,11 +174,57 @@ export default function App() {
   const [viewType, setViewType] = useState<"workspace" | "category-hub" | "notebook-pages-hub" | "trash">("workspace");
   const [notebookInitialPageId, setNotebookInitialPageId] = useState<string | null>(null);
   
-  // Load session & data from localstorage
+  // Load session & data from localstorage with token validation
   useEffect(() => {
-    const savedSession = localStorage.getItem("notenext_session") || localStorage.getItem("veridian_session");
+    const savedSession = localStorage.getItem("notenext_session");
     if (savedSession) {
-      setSession(JSON.parse(savedSession));
+      try {
+        const parsed = JSON.parse(savedSession);
+        // Exclui qualquer resquício de mock antigo ou usuário não verificado
+        if (!parsed || !parsed.email || parsed.email.includes("colaborador@corporativo.microsoft.com") || !parsed.mfaEnabled) {
+          localStorage.removeItem("notenext_session");
+          localStorage.removeItem("veridian_session");
+          setSession(null);
+        } else if (parsed.token) {
+          // Validação em segundo plano no backend Express
+          fetch("/api/auth/me", {
+            headers: {
+              Authorization: `Bearer ${parsed.token}`,
+            },
+          })
+            .then((res) => res.json())
+            .then((data) => {
+              if (data.valid && data.user) {
+                setSession({
+                  ...parsed,
+                  email: data.user.email,
+                  name: data.user.name,
+                  isAuthenticated: true,
+                  mfaEnabled: true,
+                });
+              } else {
+                localStorage.removeItem("notenext_session");
+                setSession(null);
+              }
+            })
+            .catch(() => {
+              // Se falhar a conexão ou token for inválido, limpa sessão
+              localStorage.removeItem("notenext_session");
+              setSession(null);
+            });
+        } else if (parsed.loginMethod === "microsoft" && parsed.idToken) {
+          setSession(parsed);
+        } else {
+          localStorage.removeItem("notenext_session");
+          setSession(null);
+        }
+      } catch {
+        localStorage.removeItem("notenext_session");
+        setSession(null);
+      }
+    } else {
+      localStorage.removeItem("veridian_session");
+      setSession(null);
     }
 
     const savedItems = localStorage.getItem("notenext_items") || localStorage.getItem("veridian_items");

@@ -1,9 +1,13 @@
 /**
  * @license
  * SPDX-License-Identifier: Apache-2.0
+ * 
+ * Componente de Autenticação Segura com Verificação em Duas Etapas (2FA - TOTP RFC 6238)
+ * Suporte a Google Authenticator, Microsoft Authenticator e Microsoft Entra ID
+ * Criado por LRCriative
  */
 
-import React, { useState, useEffect } from "react";
+import React, { useState } from "react";
 import { motion, AnimatePresence } from "motion/react";
 import { 
   Lock, 
@@ -13,834 +17,990 @@ import {
   ArrowRight, 
   Check, 
   ShieldCheck, 
-  Layers, 
+  Smartphone, 
+  KeyRound, 
+  QrCode, 
+  Copy, 
+  CheckCheck, 
+  AlertCircle, 
+  ArrowLeft, 
+  User, 
   Signature,
-  KeyRound,
-  Smartphone,
-  ExternalLink,
-  Info,
-  ChevronDown,
-  ChevronUp,
-  AlertCircle,
-  HelpCircle,
-  Copy,
-  CheckCheck
+  RefreshCw,
+  Info
 } from "lucide-react";
 import { UserSession } from "../types";
 import { loginWithMicrosoft } from "../auth/msalService";
-import { isMsalConfigured, AZURE_CLIENT_ID, AZURE_TENANT_ID, AZURE_REDIRECT_URI } from "../auth/msalConfig";
+import { isMsalConfigured } from "../auth/msalConfig";
 
 interface LoginScreenProps {
   onLoginSuccess: (session: UserSession) => void;
 }
 
+type AuthStage = "login" | "mfa-setup" | "mfa-verify" | "register" | "forgot-password";
+
 export default function LoginScreen({ onLoginSuccess }: LoginScreenProps) {
-  // Navigation & Modal views
-  const [showConfigGuide, setShowConfigGuide] = useState(false);
-  const [showLegacyLogin, setShowLegacyLogin] = useState(false);
-  const [isRegistering, setIsRegistering] = useState(false);
-  const [isForgotPassword, setIsForgotPassword] = useState(false);
+  // Controle de estágios condicionais
+  const [stage, setStage] = useState<AuthStage>("login");
 
-  // Authenticator Simulation / Wait State
-  const [isWaitingAuthenticator, setIsWaitingAuthenticator] = useState(false);
-  const [authenticatorCode, setAuthenticatorCode] = useState("68");
-  const [copiedUrl, setCopiedUrl] = useState(false);
-
-  // Normal login states
-  const [email, setEmail] = useState("admin@notenext.sh");
-  const [password, setPassword] = useState("password123");
+  // Credenciais estritamente individuais (sem qualquer valor pré-preenchido ou mock)
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
-  const [rememberMe, setRememberMe] = useState(true);
 
-  // Register state
+  // Registro de nova conta
+  const [regName, setRegName] = useState("");
   const [regEmail, setRegEmail] = useState("");
   const [regPassword, setRegPassword] = useState("");
   const [regPasswordConfirm, setRegPasswordConfirm] = useState("");
 
-  // Forgot password state
+  // Redefinição de senha
   const [forgotEmail, setForgotEmail] = useState("");
-  const [forgotNewPassword, setForgotNewPassword] = useState("");
-  const [forgotNewPasswordConfirm, setForgotNewPasswordConfirm] = useState("");
+  const [forgotPassword, setForgotPassword] = useState("");
+  const [forgotPasswordConfirm, setForgotPasswordConfirm] = useState("");
 
-  // Status & loading indicators
-  const [statusText, setStatusText] = useState("");
-  const [isVerifying, setIsVerifying] = useState(false);
+  // Estado do fluxo de MFA / 2FA
+  const [tempToken, setTempToken] = useState<string | null>(null);
+  const [mfaEmail, setMfaEmail] = useState("");
+  const [mfaSecret, setMfaSecret] = useState("");
+  const [qrCodeUrl, setQrCodeUrl] = useState("");
+  const [totpCode, setTotpCode] = useState("");
+  const [showManualSecret, setShowManualSecret] = useState(false);
+  const [copiedSecret, setCopiedSecret] = useState(false);
+
+  // Estados de feedback e carregamento
+  const [isLoading, setIsLoading] = useState(false);
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const [successMessage, setSuccessMessage] = useState<string | null>(null);
   const [isEnteringApp, setIsEnteringApp] = useState(false);
 
-  // Generate random number for Microsoft Authenticator number matching simulation
-  useEffect(() => {
-    setAuthenticatorCode(Math.floor(10 + Math.random() * 89).toString());
-  }, []);
-
   /**
-   * FLUXO OFICIAL / PRINCIPAL: Login com Microsoft Entra ID + Microsoft Authenticator
+   * 1. Submissão do Login de Credenciais (E-mail e Senha)
+   * O backend valida a senha e decide condicionalmente se exige setup de QR Code ou desafio de 6 dígitos
    */
-  const handleMicrosoftLogin = async () => {
-    setIsVerifying(true);
-    setStatusText("Iniciando autenticação com Microsoft Entra ID...");
-
-    try {
-      if (!isMsalConfigured) {
-        // Exibe tela interativa de aprovação no Microsoft Authenticator para simulação realista
-        setIsWaitingAuthenticator(true);
-        setStatusText("Aguardando aprovação no aplicativo Microsoft Authenticator...");
-        
-        // Simula aprovação do usuário pelo smartphone após 2.4 segundos
-        setTimeout(async () => {
-          setIsWaitingAuthenticator(false);
-          setStatusText("Aprovação confirmada pelo Microsoft Authenticator! Validando Token JWT...");
-          
-          const session = await loginWithMicrosoft();
-          triggerSuccessTransition(session);
-        }, 2400);
-        return;
-      }
-
-      // Executa o fluxo real com a biblioteca @azure/msal-browser
-      const session = await loginWithMicrosoft();
-      setStatusText("Token do Entra ID validado com sucesso! Carregando seu espaço...");
-      triggerSuccessTransition(session);
-    } catch (err: any) {
-      console.error("Erro no login Microsoft:", err);
-      setIsWaitingAuthenticator(false);
-      setIsVerifying(false);
-      setStatusText(`Erro de autenticação: ${err.message || "Não foi possível autenticar na Microsoft."}`);
-    }
-  };
-
-  // Handle Credentials Submit (Login Local de Fallback)
-  const handleCredentialsSubmit = async (e: React.FormEvent) => {
+  const handleLoginSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!email || !password) return;
+    setErrorMessage(null);
+    setSuccessMessage(null);
 
-    setIsVerifying(true);
-    setStatusText("Verificando credenciais no banco de dados seguro...");
+    const cleanEmail = email.trim().toLowerCase();
+    if (!cleanEmail || !password) {
+      setErrorMessage("Por favor, preencha o e-mail e a senha.");
+      return;
+    }
+
+    setIsLoading(true);
 
     try {
       const response = await fetch("/api/auth/login", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email, password })
+        body: JSON.stringify({ email: cleanEmail, password }),
       });
+
       const data = await response.json();
 
-      if (!response.ok || data.error) {
-        setStatusText(data.error || "Erro de login.");
-        setIsVerifying(false);
+      if (!response.ok) {
+        throw new Error(data.error || "Falha ao realizar login. Verifique suas credenciais.");
+      }
+
+      setTempToken(data.tempToken);
+      setMfaEmail(data.email || cleanEmail);
+      setTotpCode("");
+
+      // CENÁRIO A: Primeiro Login - Usuário precisa configurar o QR Code no app autenticador
+      if (data.requireMfaSetup) {
+        await initMfaSetup(data.tempToken, data.email || cleanEmail);
         return;
       }
 
-      setStatusText("Sucesso! Carregando seu espaço...");
-      const localSession: UserSession = {
-        email: email || "usuario@workspace.com",
-        name: email.split("@")[0] || "Criativo Local",
-        isAuthenticated: true,
-        loginMethod: "credentials",
-        mfaEnabled: false,
-      };
-      triggerSuccessTransition(localSession);
-    } catch (err) {
-      console.error(err);
-      setStatusText("Erro de conexão ao ler base de dados.");
-      setIsVerifying(false);
+      // CENÁRIO B: Usuário já possui 2FA ativo - Exige código de 6 dígitos
+      if (data.requireMfaVerify) {
+        setStage("mfa-verify");
+        setIsLoading(false);
+        return;
+      }
+    } catch (err: any) {
+      setErrorMessage(err.message || "Erro de conexão ao servidor.");
+      setIsLoading(false);
     }
   };
 
-  // Handle Register Submit
+  /**
+   * Inicia o fluxo de configuração do MFA chamando /api/auth/mfa-setup
+   */
+  const initMfaSetup = async (token: string, userEmail: string) => {
+    setIsLoading(true);
+    setErrorMessage(null);
+
+    try {
+      const response = await fetch("/api/auth/mfa-setup", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({ tempToken: token }),
+      });
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        throw new Error(data.error || "Não foi possível gerar a chave de 2FA.");
+      }
+
+      setQrCodeUrl(data.qrCodeUrl);
+      setMfaSecret(data.secret);
+      setMfaEmail(userEmail);
+      setStage("mfa-setup");
+    } catch (err: any) {
+      setErrorMessage(err.message || "Erro ao gerar QR Code para 2FA.");
+      setStage("login");
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  /**
+   * 2. Verificação do Código de 6 Dígitos (TOTP)
+   * Válido tanto para o cadastro inicial (QR Code) quanto para o login diário
+   */
+  const handleVerifyTotp = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setErrorMessage(null);
+
+    const cleanCode = totpCode.trim().replace(/\s+/g, "");
+    if (!cleanCode || cleanCode.length !== 6) {
+      setErrorMessage("Digite o código completo de 6 dígitos numéricos.");
+      return;
+    }
+
+    if (!tempToken) {
+      setErrorMessage("Sessão expirada. Por favor, faça login novamente.");
+      setStage("login");
+      return;
+    }
+
+    setIsLoading(true);
+
+    try {
+      const response = await fetch("/api/auth/mfa-verify", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${tempToken}`,
+        },
+        body: JSON.stringify({
+          tempToken,
+          code: cleanCode,
+        }),
+      });
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        throw new Error(data.error || "Código de verificação incorreto ou expirado.");
+      }
+
+      // Sessão individual autenticada com sucesso
+      const newSession: UserSession = {
+        email: data.user.email,
+        name: data.user.name || data.user.email.split("@")[0],
+        isAuthenticated: true,
+        loginMethod: "credentials",
+        mfaEnabled: true,
+        token: data.token,
+      };
+
+      // Transição suave para o Workspace
+      triggerSessionTransition(newSession);
+    } catch (err: any) {
+      setErrorMessage(err.message || "Falha na verificação de 2FA.");
+      setIsLoading(false);
+    }
+  };
+
+  /**
+   * 3. Cadastro de Nova Conta Individual
+   */
   const handleRegisterSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!regEmail || !regPassword || !regPasswordConfirm) {
-      setStatusText("Preencha todos os campos obrigatórios.");
+    setErrorMessage(null);
+    setSuccessMessage(null);
+
+    if (!regEmail.trim() || !regPassword) {
+      setErrorMessage("Todos os campos obrigatórios devem ser preenchidos.");
       return;
     }
 
     if (regPassword !== regPasswordConfirm) {
-      setStatusText("As senhas inseridas não coincidem!");
+      setErrorMessage("A confirmação de senha não confere.");
       return;
     }
 
     if (regPassword.length < 6) {
-      setStatusText("A senha necessita ter ao menos 6 caracteres.");
+      setErrorMessage("A senha deve ter no mínimo 6 caracteres.");
       return;
     }
 
-    setIsVerifying(true);
-    setStatusText("Criando nova conta criptografada...");
+    setIsLoading(true);
 
     try {
       const response = await fetch("/api/auth/register", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email: regEmail, password: regPassword })
+        body: JSON.stringify({
+          name: regName.trim(),
+          email: regEmail.trim().toLowerCase(),
+          password: regPassword,
+        }),
       });
+
       const data = await response.json();
 
-      if (!response.ok || data.error) {
-        setStatusText(data.error || "Erro ao registrar.");
-        setIsVerifying(false);
-        return;
+      if (!response.ok) {
+        throw new Error(data.error || "Falha ao registrar usuário.");
       }
 
-      setStatusText("Conta criada com sucesso! Redirecionando...");
-      setEmail(regEmail);
-      setPassword(regPassword);
-      setIsRegistering(false);
-      setIsVerifying(false);
-
-      const newSession: UserSession = {
-        email: regEmail,
-        name: regEmail.split("@")[0],
-        isAuthenticated: true,
-        loginMethod: "credentials",
-        mfaEnabled: false,
-      };
-      triggerSuccessTransition(newSession);
-    } catch (err) {
-      console.error(err);
-      setStatusText("Erro de rede ao salvar novo cadastro.");
-      setIsVerifying(false);
+      setSuccessMessage("Conta criada com sucesso! Entre com sua senha para ativar o 2FA via aplicativo.");
+      setEmail(regEmail.trim().toLowerCase());
+      setPassword("");
+      setRegName("");
+      setRegEmail("");
+      setRegPassword("");
+      setRegPasswordConfirm("");
+      setStage("login");
+    } catch (err: any) {
+      setErrorMessage(err.message || "Erro ao registrar conta.");
+    } finally {
+      setIsLoading(false);
     }
   };
 
-  // Handle Forgot Password Submit
+  /**
+   * 4. Redefinição de Senha
+   */
   const handleForgotPasswordSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!forgotEmail || !forgotNewPassword || !forgotNewPasswordConfirm) {
-      setStatusText("Preencha todos os dados necessários.");
+    setErrorMessage(null);
+    setSuccessMessage(null);
+
+    if (!forgotEmail.trim() || !forgotPassword) {
+      setErrorMessage("Preencha o e-mail e a nova senha.");
       return;
     }
 
-    if (forgotNewPassword !== forgotNewPasswordConfirm) {
-      setStatusText("As novas senhas informadas não coincidem.");
+    if (forgotPassword !== forgotPasswordConfirm) {
+      setErrorMessage("As senhas digitadas não são iguais.");
       return;
     }
 
-    if (forgotNewPassword.length < 6) {
-      setStatusText("A nova senha deve possuir ao menos 6 caracteres.");
+    if (forgotPassword.length < 6) {
+      setErrorMessage("A nova senha deve ter no mínimo 6 dígitos.");
       return;
     }
 
-    setIsVerifying(true);
-    setStatusText("Atualizando credencial do usuário no banco...");
+    setIsLoading(true);
 
     try {
       const response = await fetch("/api/auth/reset-password", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email: forgotEmail, newPassword: forgotNewPassword })
+        body: JSON.stringify({
+          email: forgotEmail.trim().toLowerCase(),
+          newPassword: forgotPassword,
+        }),
       });
+
       const data = await response.json();
 
-      if (!response.ok || data.error) {
-        setStatusText(data.error || "Não foi possível alterar a senha.");
-        setIsVerifying(false);
-        return;
+      if (!response.ok) {
+        throw new Error(data.error || "Não foi possível redefinir a senha.");
       }
 
-      setStatusText("Senha atualizada no banco de dados! Retorne ao login.");
-      setEmail(forgotEmail);
-      setPassword(forgotNewPassword);
-
-      setTimeout(() => {
-        setIsForgotPassword(false);
-        setStatusText("");
-        setIsVerifying(false);
-      }, 1500);
-    } catch (err) {
-      console.error(err);
-      setStatusText("Erro ao conectar com servidor de segurança.");
-      setIsVerifying(false);
+      setSuccessMessage("Senha redefinida com sucesso! Ao entrar, configure seu novo código 2FA.");
+      setEmail(forgotEmail.trim().toLowerCase());
+      setPassword("");
+      setStage("login");
+    } catch (err: any) {
+      setErrorMessage(err.message || "Erro ao redefinir senha.");
+    } finally {
+      setIsLoading(false);
     }
   };
 
-  const triggerSuccessTransition = (finalSession: UserSession) => {
-    setIsEnteringApp(true);
-    setStatusText(
-      finalSession.loginMethod === "microsoft"
-        ? "Identidade validada via Microsoft Entra ID + Authenticator..."
-        : "Inicializando NoteNext Workspace..."
-    );
-    setTimeout(() => {
-      setIsVerifying(false);
-      onLoginSuccess(finalSession);
-    }, 2200);
+  /**
+   * 5. Login Corporativo Microsoft Entra ID (Opcional)
+   */
+  const handleMicrosoftLogin = async () => {
+    setErrorMessage(null);
+    setIsLoading(true);
+
+    try {
+      const session = await loginWithMicrosoft();
+      triggerSessionTransition(session);
+    } catch (err: any) {
+      setErrorMessage(err.message || "Falha no login Microsoft.");
+      setIsLoading(false);
+    }
   };
 
-  const copyToClipboard = (text: string) => {
-    navigator.clipboard.writeText(text);
-    setCopiedUrl(true);
-    setTimeout(() => setCopiedUrl(false), 2000);
+  const triggerSessionTransition = (finalSession: UserSession) => {
+    setIsEnteringApp(true);
+    setTimeout(() => {
+      onLoginSuccess(finalSession);
+    }, 1500);
+  };
+
+  const copySecretToClipboard = () => {
+    if (!mfaSecret) return;
+    navigator.clipboard.writeText(mfaSecret);
+    setCopiedSecret(true);
+    setTimeout(() => setCopiedSecret(false), 2000);
+  };
+
+  const cancelToLogin = () => {
+    setStage("login");
+    setTempToken(null);
+    setTotpCode("");
+    setErrorMessage(null);
   };
 
   return (
-    <div className="min-h-screen relative overflow-hidden bg-[#fafcfb] flex flex-col items-center justify-between font-sans p-4">
+    <div id="login-container" className="min-h-screen relative overflow-hidden bg-[#fafcfb] flex flex-col items-center justify-between font-sans p-4">
       {/* Decorative Orbs */}
       <div className="absolute top-[-10%] left-[-10%] w-[40rem] h-[40rem] rounded-full bg-brand-50 blur-[130px] -z-10 pointer-events-none opacity-80" />
       <div className="absolute bottom-[-15%] right-[-10%] w-[50rem] h-[50rem] rounded-full bg-emerald-50/50 blur-[150px] -z-10 pointer-events-none opacity-80" />
       
       {/* Grid Overlay */}
-      <div className="absolute inset-0 milanote-grid opacity-[0.4] pointer-events-none" />
+      <div className="absolute inset-0 milanote-grid opacity-[0.35] pointer-events-none" />
 
-      {/* Spacer to balance vertical centering with the footer */}
+      {/* Vertical Spacer */}
       <div className="w-full h-2 hidden sm:block pointer-events-none" />
 
-      <div className="w-full flex-1 flex items-center justify-center my-auto z-10">
+      {/* Main Container */}
+      <div className="w-full flex-1 flex items-center justify-center my-auto z-10 py-6">
         <AnimatePresence mode="wait">
-        {!isEnteringApp ? (
-          <motion.div
-            key="login-box"
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            exit={{ opacity: 0, scale: 0.95 }}
-            transition={{ duration: 0.5, ease: [0.16, 1, 0.3, 1] }}
-            className="w-full max-w-md bg-white rounded-2xl border border-gray-150 shadow-[0_12px_40px_rgba(0,0,0,0.03)] p-8 relative"
-          >
-            {/* Top Enterprise Security Badge */}
-            <div className="flex justify-between items-center mb-6">
-              <div className="flex items-center gap-2 px-3 py-1 rounded-full bg-blue-50 border border-blue-100 text-blue-800 text-[11px] font-semibold tracking-tight">
-                <ShieldCheck className="w-3.5 h-3.5 text-blue-600" />
-                <span>Microsoft Entra ID • OAuth 2.0 PKCE</span>
-              </div>
-              
-              <button
-                type="button"
-                onClick={() => setShowConfigGuide(true)}
-                className="text-gray-400 hover:text-brand-700 transition-colors p-1 cursor-pointer"
-                title="Ver Checklist de Configuração do Azure"
-              >
-                <HelpCircle className="w-4 h-4" />
-              </button>
-            </div>
-
-            {/* Logo Header */}
-            <div className="text-center mb-6">
-              <h1 className="text-3xl font-extrabold font-display tracking-tight text-gray-900 flex items-center justify-center gap-2">
-                <Signature className="text-brand-600 w-8 h-8 rotate-6" />
-                <span>NoteNext</span>
-              </h1>
-              <p className="text-gray-500 text-xs mt-2">
-                Workspace colaborativo protegido com autenticação corporativa Microsoft.
-              </p>
-            </div>
-
-            {/* MSAL Status Alert (Indicator if .env variables are present) */}
-            <div className={`mb-6 p-3 rounded-xl border text-xs flex items-start gap-2.5 transition-all ${
-              isMsalConfigured 
-                ? "bg-emerald-50/70 border-emerald-200 text-emerald-900" 
-                : "bg-slate-50 border-slate-200 text-slate-700"
-            }`}>
-              <Info className={`w-4 h-4 flex-shrink-0 mt-0.5 ${isMsalConfigured ? "text-emerald-600" : "text-blue-500"}`} />
-              <div className="space-y-1">
-                <span className="font-bold block">
-                  {isMsalConfigured 
-                    ? "Conectado ao Microsoft Entra ID" 
-                    : "Ambiente de Teste MSAL Ativo"}
-                </span>
-                <p className="text-[11px] leading-relaxed text-gray-600">
-                  {isMsalConfigured 
-                    ? `Tenant configurado (${AZURE_TENANT_ID}). Pronto para login com Microsoft Authenticator.`
-                    : "Simulação de MFA com Microsoft Authenticator ativada. Clique no ícone de ajuda (?) para ver o checklist do Azure Portal."}
+          {!isEnteringApp ? (
+            <motion.div
+              key={stage}
+              initial={{ opacity: 0, y: 15 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.96 }}
+              transition={{ duration: 0.35, ease: [0.16, 1, 0.3, 1] }}
+              className="w-full max-w-md bg-white rounded-2xl border border-gray-200/80 shadow-[0_12px_40px_rgba(0,0,0,0.04)] p-8 relative"
+            >
+              {/* Header Logo */}
+              <div className="text-center mb-6">
+                <div className="inline-flex items-center justify-center w-12 h-12 rounded-xl bg-brand-50 text-brand-600 mb-3 shadow-sm border border-brand-100">
+                  <Signature className="w-6 h-6 rotate-6" />
+                </div>
+                <h1 className="text-2xl font-bold font-display tracking-tight text-gray-900">
+                  NoteNext Workspace
+                </h1>
+                <p className="text-gray-500 text-xs mt-1">
+                  Ambiente seguro com verificação em duas etapas (2FA)
                 </p>
               </div>
-            </div>
 
-            {/* Modal de Espera do Microsoft Authenticator (Number Matching) */}
-            <AnimatePresence>
-              {isWaitingAuthenticator && (
-                <motion.div
-                  initial={{ opacity: 0, scale: 0.95 }}
-                  animate={{ opacity: 1, scale: 1 }}
-                  exit={{ opacity: 0, scale: 0.95 }}
-                  className="mb-6 p-5 bg-gradient-to-br from-blue-50 to-indigo-50/50 border border-blue-200 rounded-2xl text-center space-y-3"
-                >
-                  <div className="w-12 h-12 mx-auto rounded-2xl bg-white shadow-sm border border-blue-100 flex items-center justify-center text-blue-600">
-                    <Smartphone className="w-6 h-6 animate-pulse text-blue-600" />
-                  </div>
-                  
-                  <div>
-                    <h3 className="text-sm font-bold text-gray-900">
-                      Abra o Microsoft Authenticator
-                    </h3>
-                    <p className="text-xs text-gray-500 mt-1">
-                      Toque no número correspondente no seu aplicativo para aprovar a entrada:
-                    </p>
-                  </div>
-
-                  {/* Number matching display */}
-                  <div className="inline-block px-6 py-2 bg-white rounded-xl border-2 border-blue-600 font-display font-extrabold text-2xl text-blue-700 tracking-wider shadow-sm">
-                    {authenticatorCode}
-                  </div>
-
-                  <div className="flex items-center justify-center gap-1.5 text-[11px] text-blue-700 font-medium">
-                    <span className="w-2 h-2 rounded-full bg-blue-600 animate-ping" />
-                    <span>Aguardando aprovação no seu celular...</span>
-                  </div>
-                </motion.div>
-              )}
-            </AnimatePresence>
-
-            {/* BOTÃO PRINCIPAL: Microsoft Entra ID */}
-            {!isWaitingAuthenticator && (
-              <div className="space-y-4">
-                <button
-                  type="button"
-                  onClick={handleMicrosoftLogin}
-                  disabled={isVerifying}
-                  className="w-full py-3.5 px-4 bg-[#2f2f2f] hover:bg-[#1f1f1f] text-white font-semibold text-sm rounded-xl transition-all shadow-md hover:shadow-lg flex items-center justify-center gap-3 relative cursor-pointer group active:scale-[0.99] border border-gray-700"
-                >
-                  {/* Official Microsoft 4-Color Logo */}
-                  <div className="grid grid-cols-2 gap-0.5 w-4 h-4 flex-shrink-0">
-                    <div className="w-2 h-2 bg-[#F25022]" />
-                    <div className="w-2 h-2 bg-[#7FBA00]" />
-                    <div className="w-2 h-2 bg-[#00A4EF]" />
-                    <div className="w-2 h-2 bg-[#FFB900]" />
-                  </div>
-
-                  <span className="tracking-tight">
-                    {isVerifying ? "Conectando à Microsoft..." : "Entrar com Microsoft"}
-                  </span>
-
-                  <ArrowRight className="w-4 h-4 text-gray-400 group-hover:translate-x-0.5 transition-transform" />
-                </button>
-
-                {/* Sub-badge highlighting Microsoft Authenticator */}
-                <div className="flex items-center justify-center gap-2 text-[11px] text-gray-500">
-                  <Smartphone className="w-3.5 h-3.5 text-blue-600" />
-                  <span>Compatível com <strong>Microsoft Authenticator</strong> (MFA/Senha sem senha)</span>
+              {/* Feedback Notifications */}
+              {errorMessage && (
+                <div className="mb-5 p-3.5 bg-red-50/90 rounded-xl border border-red-200 text-xs text-red-800 flex items-start gap-2.5">
+                  <AlertCircle className="w-4 h-4 text-red-600 flex-shrink-0 mt-0.5" />
+                  <span className="leading-relaxed">{errorMessage}</span>
                 </div>
+              )}
 
-                {/* Divider */}
-                <div className="relative my-6">
-                  <div className="absolute inset-0 flex items-center">
-                    <div className="w-full border-t border-gray-150" />
-                  </div>
-                  <div className="relative flex justify-center text-[10px] uppercase font-bold tracking-wider">
-                    <span className="bg-white px-3 text-gray-400">
-                      Ou utilize método alternativo
+              {successMessage && (
+                <div className="mb-5 p-3.5 bg-emerald-50/90 rounded-xl border border-emerald-200 text-xs text-emerald-800 flex items-start gap-2.5">
+                  <Check className="w-4 h-4 text-emerald-600 flex-shrink-0 mt-0.5" />
+                  <span className="leading-relaxed">{successMessage}</span>
+                </div>
+              )}
+
+              {/* ============================================================ */}
+              {/* TELA 1: LOGIN PRINCIPAL (INDIVIDUAL)                         */}
+              {/* ============================================================ */}
+              {stage === "login" && (
+                <div>
+                  <div className="flex items-center justify-between mb-4">
+                    <span className="text-xs font-semibold uppercase tracking-wider text-gray-400">
+                      Identificação Individual
+                    </span>
+                    <span className="inline-flex items-center gap-1 text-[11px] font-medium text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded-full border border-emerald-150">
+                      <ShieldCheck className="w-3 h-3 text-emerald-600" />
+                      2FA Obrigatório
                     </span>
                   </div>
-                </div>
 
-                {/* Toggle para login local de fallback */}
-                <div className="text-center">
-                  <button
-                    type="button"
-                    onClick={() => setShowLegacyLogin(!showLegacyLogin)}
-                    className="inline-flex items-center gap-1.5 text-xs text-gray-600 hover:text-gray-900 font-medium py-1 px-3 rounded-lg hover:bg-gray-50 transition-colors cursor-pointer"
-                  >
-                    <span>{showLegacyLogin ? "Ocultar login local por e-mail/senha" : "Acessar com credenciais locais (dev/backup)"}</span>
-                    {showLegacyLogin ? <ChevronUp className="w-3.5 h-3.5" /> : <ChevronDown className="w-3.5 h-3.5" />}
-                  </button>
-                </div>
-              </div>
-            )}
-
-            {/* SEÇÃO OPCIONAL: Formulário Local (E-mail/Senha) */}
-            {showLegacyLogin && !isWaitingAuthenticator && (
-              <motion.div
-                initial={{ opacity: 0, height: 0 }}
-                animate={{ opacity: 1, height: "auto" }}
-                exit={{ opacity: 0, height: 0 }}
-                className="mt-5 pt-4 border-t border-gray-100"
-              >
-                {isForgotPassword ? (
-                  /* Forgot password */
-                  <form onSubmit={handleForgotPasswordSubmit} className="space-y-3">
-                    <div className="text-center mb-2">
-                      <h4 className="text-xs font-bold text-gray-700 uppercase tracking-wider">
-                        Redefinir Senha Local
-                      </h4>
-                    </div>
+                  <form onSubmit={handleLoginSubmit} className="space-y-4">
                     <div>
-                      <input
-                        type="email"
-                        required
-                        value={forgotEmail}
-                        onChange={(e) => setForgotEmail(e.target.value)}
-                        placeholder="E-mail cadastrado"
-                        className="w-full px-3 py-2 rounded-xl border border-gray-250 text-xs focus:outline-none focus:border-brand-500 font-sans"
-                      />
-                    </div>
-                    <div>
-                      <input
-                        type="password"
-                        required
-                        value={forgotNewPassword}
-                        onChange={(e) => setForgotNewPassword(e.target.value)}
-                        placeholder="Nova senha (min 6 caracteres)"
-                        className="w-full px-3 py-2 rounded-xl border border-gray-250 text-xs focus:outline-none focus:border-brand-500 font-sans"
-                      />
-                    </div>
-                    <div>
-                      <input
-                        type="password"
-                        required
-                        value={forgotNewPasswordConfirm}
-                        onChange={(e) => setForgotNewPasswordConfirm(e.target.value)}
-                        placeholder="Confirmar nova senha"
-                        className="w-full px-3 py-2 rounded-xl border border-gray-250 text-xs focus:outline-none focus:border-brand-500 font-sans"
-                      />
-                    </div>
-                    <button
-                      type="submit"
-                      disabled={isVerifying}
-                      className="w-full py-2 bg-gray-800 hover:bg-gray-900 text-white font-medium text-xs rounded-xl transition-all cursor-pointer"
-                    >
-                      Salvar Nova Senha
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => setIsForgotPassword(false)}
-                      className="w-full text-center text-[11px] text-gray-500 hover:underline pt-1 cursor-pointer"
-                    >
-                      Voltar ao formulário
-                    </button>
-                  </form>
-                ) : isRegistering ? (
-                  /* Register */
-                  <form onSubmit={handleRegisterSubmit} className="space-y-3">
-                    <div className="text-center mb-2">
-                      <h4 className="text-xs font-bold text-gray-700 uppercase tracking-wider">
-                        Nova Conta Local
-                      </h4>
-                    </div>
-                    <div>
-                      <input
-                        type="email"
-                        required
-                        value={regEmail}
-                        onChange={(e) => setRegEmail(e.target.value)}
-                        placeholder="Seu e-mail"
-                        className="w-full px-3 py-2 rounded-xl border border-gray-250 text-xs focus:outline-none focus:border-brand-500 font-sans"
-                      />
-                    </div>
-                    <div>
-                      <input
-                        type="password"
-                        required
-                        value={regPassword}
-                        onChange={(e) => setRegPassword(e.target.value)}
-                        placeholder="Senha de acesso"
-                        className="w-full px-3 py-2 rounded-xl border border-gray-250 text-xs focus:outline-none focus:border-brand-500 font-sans"
-                      />
-                    </div>
-                    <div>
-                      <input
-                        type="password"
-                        required
-                        value={regPasswordConfirm}
-                        onChange={(e) => setRegPasswordConfirm(e.target.value)}
-                        placeholder="Confirmar senha"
-                        className="w-full px-3 py-2 rounded-xl border border-gray-250 text-xs focus:outline-none focus:border-brand-500 font-sans"
-                      />
-                    </div>
-                    <button
-                      type="submit"
-                      disabled={isVerifying}
-                      className="w-full py-2 bg-brand-600 hover:bg-brand-700 text-white font-medium text-xs rounded-xl transition-all cursor-pointer"
-                    >
-                      Finalizar Cadastro Local
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => setIsRegistering(false)}
-                      className="w-full text-center text-[11px] text-gray-500 hover:underline pt-1 cursor-pointer"
-                    >
-                      Já possui conta local? Fazer login
-                    </button>
-                  </form>
-                ) : (
-                  /* Standard login */
-                  <form onSubmit={handleCredentialsSubmit} className="space-y-3">
-                    <div>
-                      <label className="block text-[10px] font-bold text-gray-500 uppercase tracking-wider mb-1">
-                        E-mail
+                      <label className="block text-xs font-medium text-gray-700 mb-1.5">
+                        Endereço de E-mail
                       </label>
-                      <input
-                        type="email"
-                        required
-                        value={email}
-                        onChange={(e) => setEmail(e.target.value)}
-                        placeholder="usuario@notenext.sh"
-                        className="w-full px-3 py-2 rounded-xl border border-gray-250 text-xs focus:outline-none focus:border-brand-500 font-sans"
-                      />
+                      <div className="relative">
+                        <Mail className="w-4 h-4 text-gray-400 absolute left-3 top-3" />
+                        <input
+                          id="login-email-input"
+                          type="email"
+                          required
+                          autoComplete="email"
+                          placeholder="seu.email@empresa.com"
+                          value={email}
+                          onChange={(e) => setEmail(e.target.value)}
+                          className="w-full pl-9 pr-3 py-2.5 bg-white border border-gray-200 rounded-xl text-xs text-gray-900 placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-brand-500/20 focus:border-brand-500 transition-all"
+                        />
+                      </div>
                     </div>
+
                     <div>
-                      <div className="flex justify-between items-center mb-1">
-                        <label className="block text-[10px] font-bold text-gray-500 uppercase tracking-wider">
-                          Senha
+                      <div className="flex justify-between items-center mb-1.5">
+                        <label className="block text-xs font-medium text-gray-700">
+                          Senha de Acesso
                         </label>
                         <button
                           type="button"
-                          onClick={() => setIsForgotPassword(true)}
-                          className="text-[10px] text-brand-600 hover:underline font-semibold cursor-pointer"
+                          onClick={() => {
+                            setErrorMessage(null);
+                            setSuccessMessage(null);
+                            setStage("forgot-password");
+                          }}
+                          className="text-[11px] text-brand-600 hover:text-brand-700 hover:underline cursor-pointer"
                         >
-                          Esqueceu?
+                          Esqueceu a senha?
                         </button>
                       </div>
                       <div className="relative">
+                        <Lock className="w-4 h-4 text-gray-400 absolute left-3 top-3" />
                         <input
+                          id="login-password-input"
                           type={showPassword ? "text" : "password"}
                           required
+                          autoComplete="current-password"
+                          placeholder="Digite sua senha"
                           value={password}
                           onChange={(e) => setPassword(e.target.value)}
-                          placeholder="Senha"
-                          className="w-full pl-3 pr-8 py-2 rounded-xl border border-gray-250 text-xs focus:outline-none focus:border-brand-500 font-sans"
+                          className="w-full pl-9 pr-10 py-2.5 bg-white border border-gray-200 rounded-xl text-xs text-gray-900 placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-brand-500/20 focus:border-brand-500 transition-all"
                         />
                         <button
                           type="button"
                           onClick={() => setShowPassword(!showPassword)}
-                          className="absolute right-2.5 top-2 text-gray-400 hover:text-gray-600 cursor-pointer"
+                          className="absolute right-3 top-3 text-gray-400 hover:text-gray-600 cursor-pointer"
                         >
-                          {showPassword ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
+                          {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
                         </button>
                       </div>
                     </div>
+
                     <button
+                      id="btn-login-submit"
                       type="submit"
-                      disabled={isVerifying}
-                      className="w-full py-2.5 bg-gray-800 hover:bg-gray-900 text-white font-medium text-xs rounded-xl transition-all cursor-pointer"
+                      disabled={isLoading}
+                      className="w-full py-2.5 bg-brand-600 hover:bg-brand-700 text-white font-medium text-xs rounded-xl shadow-sm hover:shadow transition-all flex items-center justify-center gap-2 cursor-pointer disabled:opacity-60"
                     >
-                      Entrar com Credenciais Locais
+                      {isLoading ? (
+                        <>
+                          <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+                          <span>Validando credenciais...</span>
+                        </>
+                      ) : (
+                        <>
+                          <span>Avançar para Verificação</span>
+                          <ArrowRight className="w-3.5 h-3.5" />
+                        </>
+                      )}
                     </button>
-                    <div className="text-center pt-1">
+                  </form>
+
+                  {/* Cadastro de nova conta */}
+                  <div className="mt-4 pt-4 border-t border-gray-100 flex items-center justify-between text-xs">
+                    <span className="text-gray-500">Primeiro acesso no sistema?</span>
+                    <button
+                      id="btn-switch-register"
+                      type="button"
+                      onClick={() => {
+                        setErrorMessage(null);
+                        setSuccessMessage(null);
+                        setStage("register");
+                      }}
+                      className="text-brand-600 font-semibold hover:text-brand-700 hover:underline cursor-pointer"
+                    >
+                      Criar Conta
+                    </button>
+                  </div>
+
+                  {/* Login Corporativo Microsoft (se configurado) */}
+                  {isMsalConfigured && (
+                    <div className="mt-4 pt-4 border-t border-gray-100">
                       <button
                         type="button"
-                        onClick={() => setIsRegistering(true)}
-                        className="text-[11px] text-gray-500 hover:text-brand-700 hover:underline cursor-pointer"
+                        onClick={handleMicrosoftLogin}
+                        disabled={isLoading}
+                        className="w-full py-2 px-3 border border-gray-200 hover:bg-gray-50 rounded-xl text-xs font-medium text-gray-700 flex items-center justify-center gap-2 cursor-pointer transition-colors"
                       >
-                        Cadastrar nova conta local
+                        <svg className="w-3.5 h-3.5" viewBox="0 0 23 23">
+                          <rect fill="#f35325" width="10.5" height="10.5" />
+                          <rect fill="#81bc06" x="12.5" width="10.5" height="10.5" />
+                          <rect fill="#05a6f0" y="12.5" width="10.5" height="10.5" />
+                          <rect fill="#ffba08" x="12.5" y="12.5" width="10.5" height="10.5" />
+                        </svg>
+                        <span>Entrar com Microsoft Entra ID</span>
                       </button>
                     </div>
+                  )}
+                </div>
+              )}
+
+              {/* ============================================================ */}
+              {/* TELA 2: CADASTRO DO QR CODE (MFA NO PRIMEIRO LOGIN)          */}
+              {/* ============================================================ */}
+              {stage === "mfa-setup" && (
+                <div id="mfa-setup-view">
+                  <div className="flex items-center justify-between mb-4">
+                    <span className="inline-flex items-center gap-1 text-[11px] font-semibold text-amber-800 bg-amber-50 px-2.5 py-0.5 rounded-full border border-amber-200">
+                      <QrCode className="w-3.5 h-3.5 text-amber-600" />
+                      Configuração de Segurança • 1º Login
+                    </span>
+                    <button
+                      type="button"
+                      onClick={cancelToLogin}
+                      className="text-xs text-gray-400 hover:text-gray-600 flex items-center gap-1 cursor-pointer"
+                    >
+                      <ArrowLeft className="w-3 h-3" />
+                      Voltar
+                    </button>
+                  </div>
+
+                  <div className="text-center mb-4">
+                    <h2 className="text-base font-bold text-gray-900">
+                      Vincule seu Aplicativo Autenticador
+                    </h2>
+                    <p className="text-[11px] text-gray-500 mt-1 leading-relaxed">
+                      Escaneie o QR Code usando o <strong className="text-gray-700">Google Authenticator</strong> ou <strong className="text-gray-700">Microsoft Authenticator</strong> no seu celular.
+                    </p>
+                  </div>
+
+                  {/* QR Code Frame */}
+                  <div className="flex flex-col items-center justify-center p-3 bg-gray-50 rounded-xl border border-gray-150 mb-4">
+                    {qrCodeUrl ? (
+                      <div className="p-2 bg-white rounded-lg shadow-sm border border-gray-100">
+                        <img
+                          id="totp-qrcode-image"
+                          src={qrCodeUrl}
+                          alt="QR Code TOTP 2FA"
+                          className="w-48 h-48 block"
+                        />
+                      </div>
+                    ) : (
+                      <div className="w-48 h-48 flex items-center justify-center text-gray-400 text-xs">
+                        <RefreshCw className="w-5 h-5 animate-spin mr-2" /> Gerando QR Code...
+                      </div>
+                    )}
+
+                    <div className="mt-2 text-center">
+                      <span className="text-[10px] text-gray-500 font-mono">
+                        Conta: {mfaEmail}
+                      </span>
+                    </div>
+
+                    {/* Opção de Visualizar Segredo Manual */}
+                    <div className="w-full mt-3 pt-2 border-t border-gray-200/70 text-center">
+                      {!showManualSecret ? (
+                        <button
+                          type="button"
+                          onClick={() => setShowManualSecret(true)}
+                          className="text-[11px] text-brand-600 hover:underline cursor-pointer"
+                        >
+                          Não consegue escanear? Digite o segredo manualmente
+                        </button>
+                      ) : (
+                        <div className="space-y-1.5">
+                          <span className="text-[10px] text-gray-500 block">Chave Secreta TOTP (Base32):</span>
+                          <div className="flex items-center justify-center gap-1.5">
+                            <code className="text-xs bg-white px-2 py-1 rounded border border-gray-200 font-mono font-semibold text-gray-800 tracking-wider">
+                              {mfaSecret}
+                            </code>
+                            <button
+                              type="button"
+                              onClick={copySecretToClipboard}
+                              className="p-1 text-gray-500 hover:text-gray-800 rounded bg-white border border-gray-200 cursor-pointer"
+                              title="Copiar Chave"
+                            >
+                              {copiedSecret ? <CheckCheck className="w-3.5 h-3.5 text-emerald-600" /> : <Copy className="w-3.5 h-3.5" />}
+                            </button>
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* Campo para confirmar o código de 6 dígitos */}
+                  <form onSubmit={handleVerifyTotp} className="space-y-3">
+                    <div>
+                      <label className="block text-xs font-semibold text-gray-800 mb-1.5 text-center">
+                        Digite o código de 6 dígitos gerado no aplicativo:
+                      </label>
+                      <input
+                        id="totp-setup-input"
+                        type="text"
+                        inputMode="numeric"
+                        pattern="[0-9]*"
+                        maxLength={6}
+                        required
+                        autoFocus
+                        placeholder="000000"
+                        value={totpCode}
+                        onChange={(e) => setTotpCode(e.target.value.replace(/\D/g, ""))}
+                        className="w-full py-2.5 text-center font-mono text-2xl font-bold tracking-[0.4em] bg-white border-2 border-brand-200 rounded-xl focus:outline-none focus:border-brand-600 focus:ring-2 focus:ring-brand-500/20 text-gray-900 transition-all"
+                      />
+                    </div>
+
+                    <button
+                      id="btn-confirm-mfa-setup"
+                      type="submit"
+                      disabled={isLoading || totpCode.length !== 6}
+                      className="w-full py-2.5 bg-brand-600 hover:bg-brand-700 text-white font-medium text-xs rounded-xl shadow-sm transition-all flex items-center justify-center gap-2 cursor-pointer disabled:opacity-50"
+                    >
+                      {isLoading ? (
+                        <>
+                          <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+                          <span>Validando código e ativando 2FA...</span>
+                        </>
+                      ) : (
+                        <>
+                          <ShieldCheck className="w-4 h-4" />
+                          <span>Confirmar e Ativar 2FA</span>
+                        </>
+                      )}
+                    </button>
                   </form>
-                )}
-              </motion.div>
-            )}
+                </div>
+              )}
 
-            {/* Bottom Status Feed */}
-            {statusText && (
-              <div className="mt-4 p-3 bg-brand-50/60 rounded-xl border border-brand-100 text-xs text-brand-800 flex items-center gap-2">
-                <Check className="w-3.5 h-3.5 text-brand-600 flex-shrink-0" />
-                <span className="font-medium animate-pulse">{statusText}</span>
-              </div>
-            )}
+              {/* ============================================================ */}
+              {/* TELA 3: DIGITAR O CÓDIGO (MFA PARA USUÁRIO JÁ CADASTRADO)    */}
+              {/* ============================================================ */}
+              {stage === "mfa-verify" && (
+                <div id="mfa-verify-view">
+                  <div className="flex items-center justify-between mb-4">
+                    <span className="inline-flex items-center gap-1 text-[11px] font-semibold text-blue-800 bg-blue-50 px-2.5 py-0.5 rounded-full border border-blue-200">
+                      <Smartphone className="w-3.5 h-3.5 text-blue-600" />
+                      Verificação em Duas Etapas
+                    </span>
+                    <button
+                      type="button"
+                      onClick={cancelToLogin}
+                      className="text-xs text-gray-400 hover:text-gray-600 flex items-center gap-1 cursor-pointer"
+                    >
+                      <ArrowLeft className="w-3 h-3" />
+                      Trocar conta
+                    </button>
+                  </div>
 
-            {/* Simulated Demo Accounts Footer */}
-            <div className="mt-6 pt-5 border-t border-gray-100 text-center text-xs text-gray-400 space-y-2">
-              <div>
-                <span className="block font-medium text-gray-500 mb-0.5">Acesso Demonstração Rápido:</span>
-                <span className="block italic text-gray-400">Padrão: admin@notenext.sh | senha: password123</span>
-              </div>
-              <div className="pt-2 border-t border-gray-50 text-[11px] text-gray-400">
-                Criado por <span className="font-semibold text-gray-600">LRCriative</span>
-              </div>
-            </div>
-          </motion.div>
-        ) : (
-          /* Transitioning/Entering Platform Animation */
-          <motion.div
-            key="entering-box"
-            initial={{ opacity: 0, scale: 0.95 }}
-            animate={{ opacity: 1, scale: 1 }}
-            className="w-full max-w-md bg-white rounded-2xl border border-gray-100 shadow-[0_12px_40px_rgba(0,0,0,0.03)] p-10 text-center flex flex-col items-center justify-center"
-          >
-            {/* Visual Loader */}
-            <div className="relative mb-6 w-20 h-20">
-              <div className="absolute inset-0 rounded-full border-4 border-blue-100 animate-pulse" />
-              <motion.div
-                initial={{ rotate: 0 }}
-                animate={{ rotate: 360 }}
-                transition={{ repeat: Infinity, duration: 1.8, ease: "linear" }}
-                className="absolute inset-0 rounded-full border-4 border-transparent border-t-blue-600"
-              />
-              <div className="absolute inset-0 flex items-center justify-center">
-                <ShieldCheck className="w-8 h-8 text-blue-600" />
-              </div>
-            </div>
+                  <div className="text-center mb-6">
+                    <div className="w-12 h-12 rounded-full bg-blue-50 border border-blue-100 flex items-center justify-center mx-auto mb-3 text-blue-600">
+                      <KeyRound className="w-6 h-6" />
+                    </div>
+                    <h2 className="text-base font-bold text-gray-900">
+                      Confirme sua Identidade
+                    </h2>
+                    <p className="text-xs text-gray-500 mt-1">
+                      Abra o <strong className="text-gray-700">Google Authenticator</strong> ou <strong className="text-gray-700">Microsoft Authenticator</strong> e informe o código atual para:
+                    </p>
+                    <span className="inline-block mt-1 px-2 py-0.5 bg-gray-100 text-gray-700 font-mono text-[11px] rounded font-medium">
+                      {mfaEmail}
+                    </span>
+                  </div>
 
-            <h2 className="text-xl font-bold font-display text-gray-900">
-              Autenticado com Sucesso
-            </h2>
-            <p className="text-xs text-gray-500 mt-1 max-w-xs">
-              {statusText || "Conectando ao NoteNext Workspace..."}
-            </p>
+                  <form onSubmit={handleVerifyTotp} className="space-y-4">
+                    <div>
+                      <input
+                        id="totp-verify-input"
+                        type="text"
+                        inputMode="numeric"
+                        pattern="[0-9]*"
+                        maxLength={6}
+                        required
+                        autoFocus
+                        placeholder="000000"
+                        value={totpCode}
+                        onChange={(e) => setTotpCode(e.target.value.replace(/\D/g, ""))}
+                        className="w-full py-3 text-center font-mono text-3xl font-bold tracking-[0.4em] bg-white border-2 border-brand-300 rounded-xl focus:outline-none focus:border-brand-600 focus:ring-2 focus:ring-brand-500/20 text-gray-900 transition-all shadow-inner"
+                      />
+                    </div>
 
-            <div className="mt-6 w-full space-y-2 text-left text-xs text-gray-600">
-              <div className="flex justify-between items-center py-1 border-b border-gray-50">
-                <span>Microsoft Entra ID</span>
-                <span className="font-bold text-emerald-600">Verificado</span>
+                    <button
+                      id="btn-verify-totp-submit"
+                      type="submit"
+                      disabled={isLoading || totpCode.length !== 6}
+                      className="w-full py-2.5 bg-brand-600 hover:bg-brand-700 text-white font-medium text-xs rounded-xl shadow-sm transition-all flex items-center justify-center gap-2 cursor-pointer disabled:opacity-50"
+                    >
+                      {isLoading ? (
+                        <>
+                          <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+                          <span>Validando acesso...</span>
+                        </>
+                      ) : (
+                        <>
+                          <ShieldCheck className="w-4 h-4" />
+                          <span>Validar e Entrar no Workspace</span>
+                        </>
+                      )}
+                    </button>
+                  </form>
+                </div>
+              )}
+
+              {/* ============================================================ */}
+              {/* TELA 4: REGISTRO DE NOVA CONTA INDIVIDUAL                    */}
+              {/* ============================================================ */}
+              {stage === "register" && (
+                <div id="register-view">
+                  <div className="flex items-center justify-between mb-4">
+                    <span className="text-xs font-semibold uppercase tracking-wider text-gray-400">
+                      Novo Cadastro
+                    </span>
+                    <button
+                      type="button"
+                      onClick={cancelToLogin}
+                      className="text-xs text-brand-600 hover:underline flex items-center gap-1 cursor-pointer"
+                    >
+                      <ArrowLeft className="w-3 h-3" />
+                      Já tenho conta
+                    </button>
+                  </div>
+
+                  <form onSubmit={handleRegisterSubmit} className="space-y-3">
+                    <div>
+                      <label className="block text-xs font-medium text-gray-700 mb-1">
+                        Nome Completo
+                      </label>
+                      <div className="relative">
+                        <User className="w-4 h-4 text-gray-400 absolute left-3 top-3" />
+                        <input
+                          id="register-name-input"
+                          type="text"
+                          required
+                          placeholder="Seu nome"
+                          value={regName}
+                          onChange={(e) => setRegName(e.target.value)}
+                          className="w-full pl-9 pr-3 py-2 bg-white border border-gray-200 rounded-xl text-xs text-gray-900 focus:outline-none focus:ring-2 focus:ring-brand-500/20 focus:border-brand-500"
+                        />
+                      </div>
+                    </div>
+
+                    <div>
+                      <label className="block text-xs font-medium text-gray-700 mb-1">
+                        E-mail
+                      </label>
+                      <div className="relative">
+                        <Mail className="w-4 h-4 text-gray-400 absolute left-3 top-3" />
+                        <input
+                          id="register-email-input"
+                          type="email"
+                          required
+                          placeholder="seu.email@empresa.com"
+                          value={regEmail}
+                          onChange={(e) => setRegEmail(e.target.value)}
+                          className="w-full pl-9 pr-3 py-2 bg-white border border-gray-200 rounded-xl text-xs text-gray-900 focus:outline-none focus:ring-2 focus:ring-brand-500/20 focus:border-brand-500"
+                        />
+                      </div>
+                    </div>
+
+                    <div>
+                      <label className="block text-xs font-medium text-gray-700 mb-1">
+                        Senha (mínimo 6 caracteres)
+                      </label>
+                      <div className="relative">
+                        <Lock className="w-4 h-4 text-gray-400 absolute left-3 top-3" />
+                        <input
+                          id="register-password-input"
+                          type="password"
+                          required
+                          placeholder="Crie uma senha forte"
+                          value={regPassword}
+                          onChange={(e) => setRegPassword(e.target.value)}
+                          className="w-full pl-9 pr-3 py-2 bg-white border border-gray-200 rounded-xl text-xs text-gray-900 focus:outline-none focus:ring-2 focus:ring-brand-500/20 focus:border-brand-500"
+                        />
+                      </div>
+                    </div>
+
+                    <div>
+                      <label className="block text-xs font-medium text-gray-700 mb-1">
+                        Confirmar Senha
+                      </label>
+                      <div className="relative">
+                        <Lock className="w-4 h-4 text-gray-400 absolute left-3 top-3" />
+                        <input
+                          id="register-confirm-password-input"
+                          type="password"
+                          required
+                          placeholder="Repita a senha"
+                          value={regPasswordConfirm}
+                          onChange={(e) => setRegPasswordConfirm(e.target.value)}
+                          className="w-full pl-9 pr-3 py-2 bg-white border border-gray-200 rounded-xl text-xs text-gray-900 focus:outline-none focus:ring-2 focus:ring-brand-500/20 focus:border-brand-500"
+                        />
+                      </div>
+                    </div>
+
+                    <button
+                      id="btn-register-submit"
+                      type="submit"
+                      disabled={isLoading}
+                      className="w-full py-2.5 bg-brand-600 hover:bg-brand-700 text-white font-medium text-xs rounded-xl shadow-sm transition-all flex items-center justify-center gap-2 cursor-pointer disabled:opacity-60 mt-2"
+                    >
+                      {isLoading ? (
+                        <>
+                          <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+                          <span>Cadastrando...</span>
+                        </>
+                      ) : (
+                        <span>Cadastrar e Configurar 2FA</span>
+                      )}
+                    </button>
+                  </form>
+                </div>
+              )}
+
+              {/* ============================================================ */}
+              {/* TELA 5: ESQUECI A SENHA                                      */}
+              {/* ============================================================ */}
+              {stage === "forgot-password" && (
+                <div id="forgot-password-view">
+                  <div className="flex items-center justify-between mb-4">
+                    <span className="text-xs font-semibold uppercase tracking-wider text-gray-400">
+                      Redefinição de Senha
+                    </span>
+                    <button
+                      type="button"
+                      onClick={cancelToLogin}
+                      className="text-xs text-brand-600 hover:underline flex items-center gap-1 cursor-pointer"
+                    >
+                      <ArrowLeft className="w-3 h-3" />
+                      Voltar ao login
+                    </button>
+                  </div>
+
+                  <form onSubmit={handleForgotPasswordSubmit} className="space-y-3">
+                    <div>
+                      <label className="block text-xs font-medium text-gray-700 mb-1">
+                        E-mail Cadastrado
+                      </label>
+                      <div className="relative">
+                        <Mail className="w-4 h-4 text-gray-400 absolute left-3 top-3" />
+                        <input
+                          id="forgot-email-input"
+                          type="email"
+                          required
+                          placeholder="seu.email@empresa.com"
+                          value={forgotEmail}
+                          onChange={(e) => setForgotEmail(e.target.value)}
+                          className="w-full pl-9 pr-3 py-2 bg-white border border-gray-200 rounded-xl text-xs text-gray-900 focus:outline-none focus:ring-2 focus:ring-brand-500/20 focus:border-brand-500"
+                        />
+                      </div>
+                    </div>
+
+                    <div>
+                      <label className="block text-xs font-medium text-gray-700 mb-1">
+                        Nova Senha
+                      </label>
+                      <div className="relative">
+                        <Lock className="w-4 h-4 text-gray-400 absolute left-3 top-3" />
+                        <input
+                          id="forgot-new-password-input"
+                          type="password"
+                          required
+                          placeholder="Digite a nova senha"
+                          value={forgotPassword}
+                          onChange={(e) => setForgotPassword(e.target.value)}
+                          className="w-full pl-9 pr-3 py-2 bg-white border border-gray-200 rounded-xl text-xs text-gray-900 focus:outline-none focus:ring-2 focus:ring-brand-500/20 focus:border-brand-500"
+                        />
+                      </div>
+                    </div>
+
+                    <div>
+                      <label className="block text-xs font-medium text-gray-700 mb-1">
+                        Confirmar Nova Senha
+                      </label>
+                      <div className="relative">
+                        <Lock className="w-4 h-4 text-gray-400 absolute left-3 top-3" />
+                        <input
+                          id="forgot-confirm-password-input"
+                          type="password"
+                          required
+                          placeholder="Repita a nova senha"
+                          value={forgotPasswordConfirm}
+                          onChange={(e) => setForgotPasswordConfirm(e.target.value)}
+                          className="w-full pl-9 pr-3 py-2 bg-white border border-gray-200 rounded-xl text-xs text-gray-900 focus:outline-none focus:ring-2 focus:ring-brand-500/20 focus:border-brand-500"
+                        />
+                      </div>
+                    </div>
+
+                    <button
+                      id="btn-forgot-submit"
+                      type="submit"
+                      disabled={isLoading}
+                      className="w-full py-2.5 bg-brand-600 hover:bg-brand-700 text-white font-medium text-xs rounded-xl shadow-sm transition-all flex items-center justify-center gap-2 cursor-pointer disabled:opacity-60 mt-2"
+                    >
+                      {isLoading ? (
+                        <>
+                          <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+                          <span>Atualizando...</span>
+                        </>
+                      ) : (
+                        <span>Salvar Nova Senha</span>
+                      )}
+                    </button>
+                  </form>
+                </div>
+              )}
+
+              {/* Assinatura LRCriative no rodapé do Card */}
+              <div className="mt-6 pt-4 border-t border-gray-100 text-center">
+                <span className="text-[11px] text-gray-400">
+                  Criado por <strong className="text-gray-600 font-semibold">LRCriative</strong>
+                </span>
               </div>
-              <div className="flex justify-between items-center py-1 border-b border-gray-50">
-                <span>Microsoft Authenticator</span>
-                <span className="font-bold text-emerald-600">MFA Aprovado</span>
+            </motion.div>
+          ) : (
+            /* Transição visual de entrada ao Workspace após 2FA verificado */
+            <motion.div
+              key="entering-box"
+              initial={{ opacity: 0, scale: 0.95 }}
+              animate={{ opacity: 1, scale: 1 }}
+              className="w-full max-w-md bg-white rounded-2xl border border-gray-100 shadow-[0_12px_40px_rgba(0,0,0,0.03)] p-10 text-center flex flex-col items-center justify-center"
+            >
+              <div className="relative mb-6 w-20 h-20">
+                <div className="absolute inset-0 rounded-full border-4 border-emerald-100 animate-pulse" />
+                <motion.div
+                  initial={{ rotate: 0 }}
+                  animate={{ rotate: 360 }}
+                  transition={{ repeat: Infinity, duration: 1.6, ease: "linear" }}
+                  className="absolute inset-0 rounded-full border-4 border-transparent border-t-emerald-600"
+                />
+                <div className="absolute inset-0 flex items-center justify-center">
+                  <ShieldCheck className="w-9 h-9 text-emerald-600" />
+                </div>
               </div>
-              <div className="flex justify-between items-center py-1">
-                <span>Token JWT / PKCE</span>
-                <span className="font-bold text-blue-600 animate-pulse">Ativo</span>
-              </div>
-            </div>
-          </motion.div>
-        )}
+
+              <h2 className="text-lg font-bold text-gray-900 mb-1">
+                Acesso Seguro Autorizado!
+              </h2>
+              <p className="text-xs text-gray-500">
+                2FA verificado via TOTP. Carregando seu ambiente de trabalho...
+              </p>
+            </motion.div>
+          )}
         </AnimatePresence>
       </div>
 
-      {/* Rodapé da Página de Login */}
-      <footer id="login-page-footer" className="w-full text-center py-3 text-xs text-gray-400 z-10">
-        <p>
-          Criado por <span className="font-semibold text-gray-600">LRCriative</span>
-        </p>
+      {/* Rodapé institucional com marca LRCriative */}
+      <footer className="w-full py-4 text-center text-xs text-gray-400 border-t border-gray-100/60 bg-white/40 backdrop-blur-sm">
+        <div className="max-w-7xl mx-auto px-4 flex flex-col sm:flex-row items-center justify-between gap-2">
+          <span>NoteNext Workspace • Gestão Segura de Notas, Ideias e Projetos</span>
+          <span>Criado por <strong className="font-semibold text-gray-600">LRCriative</strong></span>
+        </div>
       </footer>
-
-      {/* CHECKLIST MODAL: Configuração no Microsoft Entra ID (Azure AD) */}
-      <AnimatePresence>
-        {showConfigGuide && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40 backdrop-blur-xs">
-            <motion.div
-              initial={{ opacity: 0, scale: 0.95 }}
-              animate={{ opacity: 1, scale: 1 }}
-              exit={{ opacity: 0, scale: 0.95 }}
-              className="bg-white w-full max-w-2xl rounded-2xl shadow-2xl border border-gray-150 overflow-hidden flex flex-col max-h-[90vh]"
-            >
-              {/* Header */}
-              <div className="p-6 bg-gradient-to-r from-blue-900 to-indigo-900 text-white flex justify-between items-center">
-                <div className="flex items-center gap-3">
-                  <div className="w-10 h-10 rounded-xl bg-white/10 flex items-center justify-center">
-                    <ShieldCheck className="w-6 h-6 text-blue-300" />
-                  </div>
-                  <div>
-                    <h3 className="font-bold text-base font-display">
-                      Checklist de Configuração no Azure Portal
-                    </h3>
-                    <p className="text-xs text-blue-200">
-                      Guia passo a passo para Microsoft Entra ID + Microsoft Authenticator
-                    </p>
-                  </div>
-                </div>
-                <button
-                  type="button"
-                  onClick={() => setShowConfigGuide(false)}
-                  className="text-white/70 hover:text-white text-sm font-bold p-1 cursor-pointer"
-                >
-                  ✕
-                </button>
-              </div>
-
-              {/* Body Content */}
-              <div className="p-6 overflow-y-auto space-y-6 text-xs text-gray-700">
-                
-                {/* 1. Variáveis de ambiente atuais */}
-                <div className="bg-gray-50 p-4 rounded-xl border border-gray-200 space-y-2">
-                  <h4 className="font-bold text-gray-900 flex items-center gap-2">
-                    <span>1. Variáveis de Ambiente Necessárias</span>
-                  </h4>
-                  <p className="text-[11px] text-gray-600 leading-relaxed">
-                    Configure as variáveis abaixo no seu arquivo <code className="bg-gray-200 px-1 py-0.5 rounded text-gray-800 font-mono">.env</code> ou no painel de Secrets da plataforma:
-                  </p>
-                  <div className="bg-gray-900 text-gray-100 p-3 rounded-lg font-mono text-[11px] space-y-1 overflow-x-auto">
-                    <div># Client ID registrado no Microsoft Entra ID</div>
-                    <div className="text-emerald-400">VITE_AZURE_CLIENT_ID="{AZURE_CLIENT_ID || 'seu-client-id-aqui'}"</div>
-                    <div># Tenant ID: "common" (corporativo+pessoal) ou GUID do seu tenant</div>
-                    <div className="text-emerald-400">VITE_AZURE_TENANT_ID="{AZURE_TENANT_ID || 'common'}"</div>
-                    <div># URI de redirecionamento (SPA)</div>
-                    <div className="text-emerald-400">VITE_AZURE_REDIRECT_URI="{AZURE_REDIRECT_URI}"</div>
-                  </div>
-                </div>
-
-                {/* 2. Passo a passo Azure Portal */}
-                <div className="space-y-3">
-                  <h4 className="font-bold text-gray-900 text-sm">
-                    2. Passo a Passo no Microsoft Entra ID (Azure Portal)
-                  </h4>
-
-                  <div className="space-y-3">
-                    <div className="p-3.5 bg-blue-50/60 rounded-xl border border-blue-100">
-                      <span className="font-bold text-blue-900 block mb-1">
-                        Passo 1: Registrar a Aplicação (App Registration)
-                      </span>
-                      <p className="text-gray-600 text-[11px] leading-relaxed">
-                        Acesse o <strong>Azure Portal</strong> (<a href="https://portal.azure.com" target="_blank" rel="noreferrer" className="text-blue-600 underline">portal.azure.com</a>) &gt; <strong>Microsoft Entra ID</strong> &gt; <strong>App registrations</strong> &gt; <strong>New registration</strong>.
-                        Defina um nome (ex: <code className="bg-white px-1 py-0.5 rounded border text-gray-800">NoteNext Workspace</code>).
-                      </p>
-                    </div>
-
-                    <div className="p-3.5 bg-blue-50/60 rounded-xl border border-blue-100">
-                      <span className="font-bold text-blue-900 block mb-1">
-                        Passo 2: Configurar URI de Redirecionamento (SPA com PKCE)
-                      </span>
-                      <p className="text-gray-600 text-[11px] leading-relaxed mb-2">
-                        Em <strong>Authentication</strong> &gt; <strong>Add a platform</strong>, escolha <strong>Single-page application (SPA)</strong>.
-                        <strong className="block text-red-600 mt-1">Importante: Não utilize a opção "Web", selecione "SPA" para habilitar o fluxo com PKCE nativo sem Client Secret!</strong>
-                      </p>
-                      <div className="flex items-center gap-2 bg-white p-2 rounded-lg border border-gray-250">
-                        <span className="font-mono text-[10.5px] text-gray-800 flex-1 truncate">{AZURE_REDIRECT_URI}</span>
-                        <button
-                          type="button"
-                          onClick={() => copyToClipboard(AZURE_REDIRECT_URI)}
-                          className="px-2 py-1 bg-blue-50 hover:bg-blue-100 text-blue-700 rounded text-[10px] font-bold flex items-center gap-1 cursor-pointer"
-                        >
-                          {copiedUrl ? <CheckCheck className="w-3 h-3 text-emerald-600" /> : <Copy className="w-3 h-3" />}
-                          <span>{copiedUrl ? "Copiado!" : "Copiar URI"}</span>
-                        </button>
-                      </div>
-                    </div>
-
-                    <div className="p-3.5 bg-blue-50/60 rounded-xl border border-blue-100">
-                      <span className="font-bold text-blue-900 block mb-1">
-                        Passo 3: Conceder Permissões de Escopo (API Permissions)
-                      </span>
-                      <p className="text-gray-600 text-[11px] leading-relaxed">
-                        Em <strong>API Permissions</strong> &gt; <strong>Add a permission</strong> &gt; <strong>Microsoft Graph</strong> &gt; <strong>Delegated permissions</strong>, selecione:
-                      </p>
-                      <ul className="list-disc list-inside mt-1 space-y-0.5 font-mono text-[11px] text-blue-950">
-                        <li>User.Read (perfil básico do usuário)</li>
-                        <li>openid, profile, email (OpenID Connect)</li>
-                      </ul>
-                    </div>
-
-                    <div className="p-3.5 bg-blue-50/60 rounded-xl border border-blue-100">
-                      <span className="font-bold text-blue-900 block mb-1">
-                        Passo 4: Habilitar Microsoft Authenticator e MFA no Tenant
-                      </span>
-                      <p className="text-gray-600 text-[11px] leading-relaxed">
-                        No Microsoft Entra ID &gt; <strong>Security</strong> &gt; <strong>Authentication methods</strong>:
-                      </p>
-                      <ul className="list-disc list-inside mt-1 space-y-0.5 text-[11px] text-gray-700">
-                        <li>Habilite o método <strong>Microsoft Authenticator</strong></li>
-                        <li>Ative a opção <strong>Number Matching</strong> (Correspondência de Números) para segurança reforçada</li>
-                        <li>Permita o modo <strong>Passwordless</strong> (Entrada sem senha pelo celular)</li>
-                      </ul>
-                    </div>
-                  </div>
-                </div>
-
-                {/* Por que não usamos Client Secret no frontend? */}
-                <div className="p-4 bg-amber-50 rounded-xl border border-amber-200">
-                  <h5 className="font-bold text-amber-900 flex items-center gap-1.5 mb-1">
-                    <AlertCircle className="w-4 h-4 text-amber-700" />
-                    <span>Nota de Arquitetura de Segurança (PKCE vs. Client Secret)</span>
-                  </h5>
-                  <p className="text-[11px] text-amber-850 leading-relaxed">
-                    Em aplicações frontend Single-Page Applications (SPA), clientes públicos <strong>não devem possuir nem armazenar Client Secret</strong>, pois qualquer código no navegador pode ser inspecionado.
-                    Por essa razão, a biblioteca MSAL utiliza <strong>Authorization Code Flow com PKCE (RFC 7636)</strong>, que é o padrão ouro de segurança da Microsoft e IETF. O Client Secret só é necessário caso você utilize um backend dedicado em modo Confidential Client.
-                  </p>
-                </div>
-
-              </div>
-
-              {/* Footer */}
-              <div className="p-4 bg-gray-50 border-t border-gray-150 flex justify-end">
-                <button
-                  type="button"
-                  onClick={() => setShowConfigGuide(false)}
-                  className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs rounded-xl transition-all cursor-pointer"
-                >
-                  Entendido, Fechar Checklist
-                </button>
-              </div>
-            </motion.div>
-          </div>
-        )}
-      </AnimatePresence>
     </div>
   );
 }
