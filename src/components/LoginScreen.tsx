@@ -203,7 +203,7 @@ export default function LoginScreen({ onLoginSuccess }: LoginScreenProps) {
   };
 
   return (
-    <div className="min-h-screen relative overflow-hidden bg-[#fafcfb] flex items-center justify-center font-sans p-4">
+    <div className="min-h-screen relative overflow-hidden bg-[#fafcfb] flex flex-col items-center justify-between font-sans p-4">
       {/* Decorative Orbs */}
       <div className="absolute top-[-10%] left-[-10%] w-[40rem] h-[40rem] rounded-full bg-brand-50 blur-[130px] -z-10 pointer-events-none opacity-80" />
       <div className="absolute bottom-[-15%] right-[-10%] w-[50rem] h-[50rem] rounded-full bg-emerald-50/50 blur-[150px] -z-10 pointer-events-none opacity-80" />
@@ -211,7 +211,11 @@ export default function LoginScreen({ onLoginSuccess }: LoginScreenProps) {
       {/* Grid Overlay */}
       <div className="absolute inset-0 milanote-grid opacity-[0.4] pointer-events-none" />
 
-      <AnimatePresence mode="wait">
+      {/* Spacer to balance vertical centering with the footer */}
+      <div className="w-full h-2 hidden sm:block pointer-events-none" />
+
+      <div className="w-full flex-1 flex items-center justify-center my-auto z-10">
+        <AnimatePresence mode="wait">
         {!isEnteringApp ? (
           <motion.div
             key="login-box"
@@ -535,9 +539,14 @@ export default function LoginScreen({ onLoginSuccess }: LoginScreenProps) {
             )}
 
             {/* Simulated Demo Accounts Footer */}
-            <div className="mt-6 pt-5 border-t border-gray-100 text-center text-xs text-gray-400">
-              <span className="block font-medium mb-1">Acesso Demonstração Rápido:</span>
-              <span className="block italic text-gray-400">Padrão: admin@notenext.sh | senha: password123</span>
+            <div className="mt-6 pt-5 border-t border-gray-100 text-center text-xs text-gray-400 space-y-2">
+              <div>
+                <span className="block font-medium text-gray-500 mb-0.5">Acesso Demonstração Rápido:</span>
+                <span className="block italic text-gray-400">Padrão: admin@notenext.sh | senha: password123</span>
+              </div>
+              <div className="pt-2 border-t border-gray-50 text-[11px] text-gray-400">
+                Criado por <span className="font-semibold text-gray-600">LRCriative</span>
+              </div>
             </div>
           </motion.div>
         ) : (
@@ -593,7 +602,15 @@ export default function LoginScreen({ onLoginSuccess }: LoginScreenProps) {
             </div>
           </motion.div>
         )}
-      </AnimatePresence>
+        </AnimatePresence>
+      </div>
+
+      {/* Rodapé da Página de Login */}
+      <footer id="login-page-footer" className="w-full text-center py-3 text-xs text-gray-400 z-10">
+        <p>
+          Criado por <span className="font-semibold text-gray-600">LRCriative</span>
+        </p>
+      </footer>
     </div>
   );
 }
