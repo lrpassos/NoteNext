@@ -34,6 +34,7 @@ import KeepWorkspace from "./components/KeepWorkspace";
 import SaaSConfigPanel from "./components/SaaSConfigPanel";
 import SmartNotebook from "./components/SmartNotebook";
 import AgentChatWidget from "./components/AgentChatWidget";
+import { logoutFromMicrosoft } from "./auth/msalService";
 
 // Elegant preset documents on first launch to showcase startup design flavor
 const INITIAL_DEMO_ITEMS: WorkspaceItem[] = [
@@ -255,10 +256,18 @@ export default function App() {
     localStorage.setItem("notenext_session", JSON.stringify(newSession));
   };
 
-  const handleLogout = () => {
-    setSession(null);
-    localStorage.removeItem("notenext_session");
-    localStorage.removeItem("veridian_session");
+  const handleLogout = async () => {
+    try {
+      if (session?.loginMethod === "microsoft") {
+        await logoutFromMicrosoft();
+      }
+    } catch (e) {
+      console.warn("Aviso durante logout:", e);
+    } finally {
+      setSession(null);
+      localStorage.removeItem("notenext_session");
+      localStorage.removeItem("veridian_session");
+    }
   };
 
   // Add dynamic workspace element

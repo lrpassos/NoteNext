@@ -6,7 +6,6 @@
       "name": "react-example",
       "dependencies": {
         "@azure/msal-browser": "^5.21.0",
-        "@azure/msal-react": "^5.7.0",
         "@google/genai": "^2.4.0",
         "@tailwindcss/vite": "^4.1.14",
         "@vitejs/plugin-react": "^5.0.4",
@@ -37,8 +36,6 @@
     "@azure/msal-browser": ["@azure/msal-browser@5.21.0", "", { "dependencies": { "@azure/msal-common": "16.14.0" } }, "sha512-80OcuXDErmcEDAIH9pBtSqBsed2sPT/IWmbG3xHLoPMl5zc8TINd6SlJAbVSmN5huGa3xGAg5qR7VnpaIEK0Zw=="],
 
     "@azure/msal-common": ["@azure/msal-common@16.14.0", "", {}, "sha512-A4rb55hI86Q9tBl/+jBj7TMz7iX2RFgQs/nExFzcAtoI/BFRVdaH5SL/MivrYD7qvweMpN8AgVvVMHV8UBYxew=="],
-
-    "@azure/msal-react": ["@azure/msal-react@5.7.0", "", { "peerDependencies": { "@azure/msal-browser": "^5.20.0", "react": "^16.8.0 || ^17 || ^18 || ^19.2.1" } }, "sha512-hu4+PMmE4R5g1/mdUpxKZP/EZ+SvPa1PStKgphhvVd5wvY+wGl9lx8U462EQf0wBQR2mJYMxA+GRvdauH+IOQw=="],
 
     "@babel/code-frame": ["@babel/code-frame@7.29.7", "", { "dependencies": { "@babel/helper-validator-identifier": "^7.29.7", "js-tokens": "^4.0.0", "picocolors": "^1.1.1" } }, "sha512-Aup7aUOfpbAUg2ROOJN6Iw5f9DMBlzu0mIkm/malLQFN/YQgO48wCj0Kxa3sEHJvPVFg7siR+qRInwXd2qhQKw=="],
 

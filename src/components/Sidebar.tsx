@@ -856,26 +856,39 @@ export default function Sidebar({
         </button>
 
         <div className="flex items-center justify-between">
-          <div className="flex items-center gap-2">
-            <div className="w-8 h-8 rounded-full bg-brand-100 border border-brand-200 flex items-center justify-center font-bold text-brand-850 text-xs">
-              LR
-            </div>
-            <div className="truncate max-w-[120px]">
+          <div className="flex items-center gap-2 min-w-0">
+            {user.loginMethod === "microsoft" ? (
+              <div className="w-8 h-8 rounded-full bg-blue-50 border border-blue-200 flex items-center justify-center relative flex-shrink-0">
+                <div className="grid grid-cols-2 gap-0.5 w-3 h-3">
+                  <div className="w-1.5 h-1.5 bg-[#F25022]" />
+                  <div className="w-1.5 h-1.5 bg-[#7FBA00]" />
+                  <div className="w-1.5 h-1.5 bg-[#00A4EF]" />
+                  <div className="w-1.5 h-1.5 bg-[#FFB900]" />
+                </div>
+              </div>
+            ) : (
+              <div className="w-8 h-8 rounded-full bg-brand-100 border border-brand-200 flex items-center justify-center font-bold text-brand-850 text-xs flex-shrink-0">
+                {user.name.slice(0, 2).toUpperCase()}
+              </div>
+            )}
+            <div className="truncate max-w-[125px]">
               <span className="block text-xs font-bold text-gray-800 leading-none truncate">{user.name}</span>
-              <span className="text-[10px] text-gray-400 block leading-tight mt-0.5">MFA Protegido</span>
+              <span className="text-[10px] text-gray-400 block leading-tight mt-0.5 truncate">
+                {user.loginMethod === "microsoft" ? "Entra ID • Authenticator" : "MFA Protegido"}
+              </span>
             </div>
           </div>
           <button
             onClick={onLogout}
-            title="Sair do Sistema"
-            className="w-7 h-7 rounded-md hover:bg-red-50 text-gray-450 hover:text-red-650 flex items-center justify-center transition-all border border-transparent hover:border-red-100"
+            title={user.loginMethod === "microsoft" ? "Encerrar Sessão Microsoft & Local" : "Sair do Sistema"}
+            className="w-7 h-7 rounded-md hover:bg-red-50 text-gray-450 hover:text-red-650 flex items-center justify-center transition-all border border-transparent hover:border-red-100 cursor-pointer flex-shrink-0"
           >
             <LogOut className="w-3.5 h-3.5" />
           </button>
         </div>
         <div className="text-[10px] text-gray-400 text-center flex items-center justify-center gap-1">
           <FolderLock className="w-3 h-3 text-brand-500" />
-          <span>Conexão Local Segura</span>
+          <span>{user.loginMethod === "microsoft" ? "Sessão Corporativa Autenticada" : "Conexão Local Segura"}</span>
         </div>
       </div>
 
