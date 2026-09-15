@@ -153,6 +153,11 @@ async function startServer() {
     }
   }
 
+  // Healthcheck endpoint for proxy and uptime monitoring
+  app.get("/api/health", (req, res) => {
+    res.json({ status: "ok", uptime: process.uptime(), timestamp: new Date().toISOString() });
+  });
+
   // List users for administrative display
   app.get("/api/auth/users", (req, res) => {
     try {
@@ -215,7 +220,13 @@ async function startServer() {
       const user = users.find((u) => u.email.toLowerCase() === cleanEmail && u.password === password);
 
       if (!user) {
-        return res.status(401).json({ error: "Credenciais inválidas! Verifique o e-mail ou a senha informada." });
+        const userExists = users.some((u) => u.email.toLowerCase() === cleanEmail);
+        if (!userExists) {
+          return res.status(401).json({
+            error: "Usuário não encontrado. Como o banco foi zerado, clique em 'Criar Conta' abaixo para se cadastrar.",
+          });
+        }
+        return res.status(401).json({ error: "Senha incorreta. Por favor, tente novamente." });
       }
 
       // Gera token temporário de estágio MFA restrito a 5 minutos

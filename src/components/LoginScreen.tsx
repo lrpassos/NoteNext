@@ -75,35 +75,60 @@ export default function LoginScreen({ onLoginSuccess }: LoginScreenProps) {
   const [isEnteringApp, setIsEnteringApp] = useState(false);
 
   /**
-   * Utilitário seguro para parsing de respostas do servidor.
-   * Evita erros "Unexpected token 'T', The page c..." quando o proxy/servidor retorna HTML ou reconecta.
+   * Chamada de API resiliente com retry automático contra quedas transitórias de proxy (404/502/503 em reinicialização)
    */
-  const safeParseResponse = async <T = any,>(response: Response): Promise<T> => {
-    const contentType = response.headers.get("content-type") || "";
-    const rawText = await response.text();
+  const safeApiRequest = async <T = any,>(url: string, options: RequestInit, maxRetries = 2): Promise<T> => {
+    let attempt = 0;
+    while (attempt <= maxRetries) {
+      attempt++;
+      try {
+        const response = await fetch(url, options);
+        const contentType = response.headers.get("content-type") || "";
+        const rawText = await response.text();
 
-    if (!rawText || rawText.trim() === "") {
-      if (!response.ok) {
-        throw new Error(`Servidor respondeu com status ${response.status}.`);
-      }
-      return {} as T;
-    }
+        // Se for resposta JSON do backend Express
+        if (contentType.includes("application/json")) {
+          let data: any = {};
+          try {
+            data = JSON.parse(rawText);
+          } catch {
+            data = {};
+          }
+          if (!response.ok) {
+            throw new Error(data.error || `Erro (${response.status}): Não foi possível concluir a operação.`);
+          }
+          return data as T;
+        }
 
-    if (!contentType.includes("application/json") || rawText.trim().startsWith("<") || rawText.trim().toLowerCase().startsWith("the page")) {
-      if (response.status === 502 || response.status === 503 || response.status === 504) {
-        throw new Error("O servidor está conectando. Por favor, aguarde alguns segundos e tente novamente.");
-      }
-      if (response.status === 404) {
-        throw new Error("Serviço temporariamente indisponível (404). Tente novamente em instantes.");
-      }
-      throw new Error("Resposta inesperada do servidor. Por favor, tente novamente.");
-    }
+        // Se for erro HTML de proxy ou gateway (404, 502, 503, 504 durante restart do servidor)
+        const isProxyError = response.status === 404 || response.status === 502 || response.status === 503 || response.status === 504;
+        if (isProxyError && attempt <= maxRetries) {
+          // Aguarda 1.2s para o servidor concluir a inicialização e tenta novamente de forma transparente
+          await new Promise((r) => setTimeout(r, 1200));
+          continue;
+        }
 
-    try {
-      return JSON.parse(rawText) as T;
-    } catch {
-      throw new Error("Não foi possível interpretar a resposta do servidor. Tente novamente.");
+        if (!response.ok) {
+          if (isProxyError) {
+            throw new Error("O servidor está conectando. Por favor, aguarde alguns instantes e tente novamente.");
+          }
+          throw new Error(`Falha de conexão com o servidor (${response.status}).`);
+        }
+
+        try {
+          return JSON.parse(rawText) as T;
+        } catch {
+          return {} as T;
+        }
+      } catch (err: any) {
+        if (attempt <= maxRetries && (err.name === "TypeError" || err.message?.includes("Failed to fetch"))) {
+          await new Promise((r) => setTimeout(r, 1200));
+          continue;
+        }
+        throw err;
+      }
     }
+    throw new Error("Servidor temporariamente indisponível. Tente novamente.");
   };
 
   /**
@@ -124,17 +149,11 @@ export default function LoginScreen({ onLoginSuccess }: LoginScreenProps) {
     setIsLoading(true);
 
     try {
-      const response = await fetch("/api/auth/login", {
+      const data = await safeApiRequest("/api/auth/login", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ email: cleanEmail, password }),
       });
-
-      const data = await safeParseResponse(response);
-
-      if (!response.ok) {
-        throw new Error(data.error || "Falha ao realizar login. Verifique suas credenciais.");
-      }
 
       setTempToken(data.tempToken);
       setMfaEmail(data.email || cleanEmail);
@@ -166,7 +185,7 @@ export default function LoginScreen({ onLoginSuccess }: LoginScreenProps) {
     setErrorMessage(null);
 
     try {
-      const response = await fetch("/api/auth/mfa-setup", {
+      const data = await safeApiRequest("/api/auth/mfa-setup", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -174,12 +193,6 @@ export default function LoginScreen({ onLoginSuccess }: LoginScreenProps) {
         },
         body: JSON.stringify({ tempToken: token }),
       });
-
-      const data = await safeParseResponse(response);
-
-      if (!response.ok) {
-        throw new Error(data.error || "Não foi possível gerar a chave de 2FA.");
-      }
 
       setQrCodeUrl(data.qrCodeUrl);
       setMfaSecret(data.secret);
@@ -216,7 +229,7 @@ export default function LoginScreen({ onLoginSuccess }: LoginScreenProps) {
     setIsLoading(true);
 
     try {
-      const response = await fetch("/api/auth/mfa-verify", {
+      const data = await safeApiRequest("/api/auth/mfa-verify", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -227,12 +240,6 @@ export default function LoginScreen({ onLoginSuccess }: LoginScreenProps) {
           code: cleanCode,
         }),
       });
-
-      const data = await safeParseResponse(response);
-
-      if (!response.ok) {
-        throw new Error(data.error || "Código de verificação incorreto ou expirado.");
-      }
 
       // Sessão individual autenticada com sucesso
       const newSession: UserSession = {
@@ -278,7 +285,7 @@ export default function LoginScreen({ onLoginSuccess }: LoginScreenProps) {
     setIsLoading(true);
 
     try {
-      const response = await fetch("/api/auth/register", {
+      const data = await safeApiRequest("/api/auth/register", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -288,13 +295,7 @@ export default function LoginScreen({ onLoginSuccess }: LoginScreenProps) {
         }),
       });
 
-      const data = await safeParseResponse(response);
-
-      if (!response.ok) {
-        throw new Error(data.error || "Falha ao registrar usuário.");
-      }
-
-      setSuccessMessage("Conta criada com sucesso! Entre com sua senha para ativar o 2FA via aplicativo.");
+      setSuccessMessage(data.message || "Conta criada com sucesso! Entre com sua senha para ativar o 2FA via aplicativo.");
       setEmail(regEmail.trim().toLowerCase());
       setPassword("");
       setRegName("");
@@ -335,7 +336,7 @@ export default function LoginScreen({ onLoginSuccess }: LoginScreenProps) {
     setIsLoading(true);
 
     try {
-      const response = await fetch("/api/auth/reset-password", {
+      const data = await safeApiRequest("/api/auth/reset-password", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -344,13 +345,7 @@ export default function LoginScreen({ onLoginSuccess }: LoginScreenProps) {
         }),
       });
 
-      const data = await safeParseResponse(response);
-
-      if (!response.ok) {
-        throw new Error(data.error || "Não foi possível redefinir a senha.");
-      }
-
-      setSuccessMessage("Senha redefinida com sucesso! Ao entrar, configure seu novo código 2FA.");
+      setSuccessMessage(data.message || "Senha redefinida com sucesso! Ao entrar, configure seu novo código 2FA.");
       setEmail(forgotEmail.trim().toLowerCase());
       setPassword("");
       setStage("login");
