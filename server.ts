@@ -134,18 +134,8 @@ async function startServer() {
   function readUsers(): DbUser[] {
     try {
       if (!fs.existsSync(USERS_FILE)) {
-        const defaults: DbUser[] = [
-          {
-            id: "usr_initial_admin",
-            email: "admin@notenext.sh",
-            password: "password123",
-            name: "Administrador",
-            mfa_enabled: false,
-            created_at: new Date().toISOString(),
-          }
-        ];
-        fs.writeFileSync(USERS_FILE, JSON.stringify(defaults, null, 2), "utf8");
-        return defaults;
+        fs.writeFileSync(USERS_FILE, JSON.stringify([], null, 2), "utf8");
+        return [];
       }
       const content = fs.readFileSync(USERS_FILE, "utf8");
       return JSON.parse(content);
