@@ -420,13 +420,18 @@ async function startServer() {
   app.get("/api/auth/me", requireSessionAuth, (req, res) => {
     try {
       const userClaim = (req as any).user;
+      const users = readUsers();
+      const existingUser = users.find((u) => u.id === userClaim.sub || u.email.toLowerCase() === userClaim.email?.toLowerCase());
+      if (!existingUser) {
+        return res.status(401).json({ valid: false, error: "Usuário não encontrado ou base de dados redefinida." });
+      }
       res.json({
         valid: true,
         user: {
-          id: userClaim.sub,
-          email: userClaim.email,
-          name: userClaim.name,
-          mfaEnabled: true,
+          id: existingUser.id,
+          email: existingUser.email,
+          name: existingUser.name,
+          mfaEnabled: existingUser.mfa_enabled,
         },
       });
     } catch (err: any) {
@@ -577,6 +582,11 @@ async function startServer() {
       console.error("Erro chamando Gemini API no servidor:", err);
       res.status(500).json({ error: err.message || "Erro de rede ou autenticação no Gemini" });
     }
+  });
+
+  // API 404 handler - prevents unhandled /api/* requests from falling into Vite SPA HTML fallback
+  app.all("/api/*", (req, res) => {
+    res.status(404).json({ error: `Rota de API não encontrada: ${req.method} ${req.originalUrl}` });
   });
 
   // Serve static assets or mount Vite dev middleware

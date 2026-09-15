@@ -75,6 +75,38 @@ export default function LoginScreen({ onLoginSuccess }: LoginScreenProps) {
   const [isEnteringApp, setIsEnteringApp] = useState(false);
 
   /**
+   * Utilitário seguro para parsing de respostas do servidor.
+   * Evita erros "Unexpected token 'T', The page c..." quando o proxy/servidor retorna HTML ou reconecta.
+   */
+  const safeParseResponse = async <T = any,>(response: Response): Promise<T> => {
+    const contentType = response.headers.get("content-type") || "";
+    const rawText = await response.text();
+
+    if (!rawText || rawText.trim() === "") {
+      if (!response.ok) {
+        throw new Error(`Servidor respondeu com status ${response.status}.`);
+      }
+      return {} as T;
+    }
+
+    if (!contentType.includes("application/json") || rawText.trim().startsWith("<") || rawText.trim().toLowerCase().startsWith("the page")) {
+      if (response.status === 502 || response.status === 503 || response.status === 504) {
+        throw new Error("O servidor está conectando. Por favor, aguarde alguns segundos e tente novamente.");
+      }
+      if (response.status === 404) {
+        throw new Error("Serviço temporariamente indisponível (404). Tente novamente em instantes.");
+      }
+      throw new Error("Resposta inesperada do servidor. Por favor, tente novamente.");
+    }
+
+    try {
+      return JSON.parse(rawText) as T;
+    } catch {
+      throw new Error("Não foi possível interpretar a resposta do servidor. Tente novamente.");
+    }
+  };
+
+  /**
    * 1. Submissão do Login de Credenciais (E-mail e Senha)
    * O backend valida a senha e decide condicionalmente se exige setup de QR Code ou desafio de 6 dígitos
    */
@@ -98,7 +130,7 @@ export default function LoginScreen({ onLoginSuccess }: LoginScreenProps) {
         body: JSON.stringify({ email: cleanEmail, password }),
       });
 
-      const data = await response.json();
+      const data = await safeParseResponse(response);
 
       if (!response.ok) {
         throw new Error(data.error || "Falha ao realizar login. Verifique suas credenciais.");
@@ -143,7 +175,7 @@ export default function LoginScreen({ onLoginSuccess }: LoginScreenProps) {
         body: JSON.stringify({ tempToken: token }),
       });
 
-      const data = await response.json();
+      const data = await safeParseResponse(response);
 
       if (!response.ok) {
         throw new Error(data.error || "Não foi possível gerar a chave de 2FA.");
@@ -196,7 +228,7 @@ export default function LoginScreen({ onLoginSuccess }: LoginScreenProps) {
         }),
       });
 
-      const data = await response.json();
+      const data = await safeParseResponse(response);
 
       if (!response.ok) {
         throw new Error(data.error || "Código de verificação incorreto ou expirado.");
@@ -256,7 +288,7 @@ export default function LoginScreen({ onLoginSuccess }: LoginScreenProps) {
         }),
       });
 
-      const data = await response.json();
+      const data = await safeParseResponse(response);
 
       if (!response.ok) {
         throw new Error(data.error || "Falha ao registrar usuário.");
@@ -312,7 +344,7 @@ export default function LoginScreen({ onLoginSuccess }: LoginScreenProps) {
         }),
       });
 
-      const data = await response.json();
+      const data = await safeParseResponse(response);
 
       if (!response.ok) {
         throw new Error(data.error || "Não foi possível redefinir a senha.");

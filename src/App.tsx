@@ -192,9 +192,14 @@ export default function App() {
               Authorization: `Bearer ${parsed.token}`,
             },
           })
-            .then((res) => res.json())
+            .then(async (res) => {
+              if (!res.ok) throw new Error("Unauthorized");
+              const contentType = res.headers.get("content-type") || "";
+              if (!contentType.includes("application/json")) throw new Error("Invalid response");
+              return res.json();
+            })
             .then((data) => {
-              if (data.valid && data.user) {
+              if (data && data.valid && data.user) {
                 setSession({
                   ...parsed,
                   email: data.user.email,
@@ -208,7 +213,7 @@ export default function App() {
               }
             })
             .catch(() => {
-              // Se falhar a conexão ou token for inválido, limpa sessão
+              // Se falhar a conexão ou token for inválido, limpa sessão e mantém tela de login limpa
               localStorage.removeItem("notenext_session");
               setSession(null);
             });
